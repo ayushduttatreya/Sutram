@@ -1,4 +1,6 @@
 # packages/core/tests/test_middleware_idempotency.py
+import asyncio
+
 import pytest
 from sutram_core.middleware.idempotency import IdempotencyStore
 
@@ -33,9 +35,6 @@ async def test_key_is_namespaced_in_redis(fake_redis):
     # Raw key in Redis should be namespaced to avoid collisions
     raw = await fake_redis.get("idempotency:my-key")
     assert raw is not None
-
-
-import asyncio
 
 
 @pytest.mark.asyncio

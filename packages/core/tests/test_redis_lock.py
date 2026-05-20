@@ -1,7 +1,8 @@
-import pytest
 import asyncio
 import uuid
-from sutram_core.locking.redis_lock import RedisLock, LockAcquisitionError
+
+import pytest
+from sutram_core.locking.redis_lock import LockAcquisitionError, RedisLock
 
 
 @pytest.mark.asyncio

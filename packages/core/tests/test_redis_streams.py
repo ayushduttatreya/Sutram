@@ -1,7 +1,8 @@
-import pytest
 import uuid
-from sutram_core.streams.redis_streams import StreamProducer, StreamConsumerGroup
+
+import pytest
 from sutram_core.events.execution import ExecutionStartedEvent
+from sutram_core.streams.redis_streams import StreamConsumerGroup, StreamProducer
 
 
 @pytest.mark.asyncio

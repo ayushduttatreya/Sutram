@@ -1,7 +1,11 @@
-import pytest
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime
 from uuid import UUID
+
+from sutram_core.models.checkpoint import Checkpoint
+from sutram_core.models.execution import ExecutionStatus
 from sutram_core.models.tenant import Tenant, TenantSettings
+from sutram_core.models.workflow import StepConfig
 
 
 def test_tenant_has_required_fields():
@@ -40,12 +44,6 @@ def test_tenant_settings_not_shared_across_instances():
     t1 = Tenant(name="a")
     t2 = Tenant(name="b")
     assert t1.settings is not t2.settings
-
-
-from sutram_core.models.workflow import Workflow, WorkflowDefinition, WorkflowStep, StepConfig
-from sutram_core.models.execution import WorkflowExecution, ExecutionStatus
-from sutram_core.models.checkpoint import Checkpoint
-import uuid
 
 
 def test_workflow_step_config_defaults():

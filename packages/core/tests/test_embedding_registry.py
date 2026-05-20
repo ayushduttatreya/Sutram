@@ -1,6 +1,6 @@
 import pytest
-from sutram_core.embedding.registry import EmbeddingRegistry
 from sutram_core.embedding.base import EmbeddingProvider
+from sutram_core.embedding.registry import EmbeddingRegistry
 
 
 class FakeEmbedder:

@@ -1,6 +1,7 @@
 # packages/core/tests/test_middleware_rate_limit.py
-import pytest
 import uuid
+
+import pytest
 from sutram_core.middleware.rate_limit import RateLimiter, RateLimitExceeded
 
 

@@ -1,9 +1,9 @@
 # packages/core/tests/test_db_session.py
 import pytest
-from sqlalchemy import text, String
+from sqlalchemy import String, text
 from sqlalchemy.orm import Mapped, mapped_column
-from sutram_core.db.session import create_engine, create_session_factory, get_session
 from sutram_core.db.base import Base, TimestampMixin
+from sutram_core.db.session import create_engine, create_session_factory, get_session
 
 
 class SampleModel(Base, TimestampMixin):

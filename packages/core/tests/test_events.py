@@ -1,14 +1,15 @@
-import pytest
+import json
 import uuid
 from datetime import datetime
+
+import pytest
 from sutram_core.events.execution import (
+    ExecutionCompletedEvent,
     ExecutionStartedEvent,
     StepCompletedEvent,
-    StepFailedEvent,
-    ExecutionCompletedEvent,
-    ExecutionPausedEvent,
 )
-from sutram_core.events.memory import MemoryWrittenEvent, MemorySearchedEvent
+from sutram_core.events.memory import MemoryWrittenEvent
+from sutram_core.models.execution import ExecutionStatus
 
 
 def test_execution_started_event_fields():
@@ -70,11 +71,6 @@ def test_two_events_have_different_trace_ids():
     assert e1.trace_id != e2.trace_id
 
 
-import json
-from sutram_core.models.execution import ExecutionStatus
-from sutram_core.models.memory import MemoryType
-
-
 def test_to_stream_dict_nested_outputs_is_valid_json():
     event = StepCompletedEvent(
         tenant_id=uuid.uuid4(),
@@ -91,8 +87,8 @@ def test_to_stream_dict_nested_outputs_is_valid_json():
 
 
 def test_event_type_is_immutable():
-    import pytest
     from pydantic import ValidationError
+
     with pytest.raises(ValidationError):
         ExecutionStartedEvent(
             tenant_id=uuid.uuid4(),
@@ -103,8 +99,8 @@ def test_event_type_is_immutable():
 
 
 def test_execution_completed_event_rejects_invalid_status():
-    import pytest
     from pydantic import ValidationError
+
     with pytest.raises(ValidationError):
         ExecutionCompletedEvent(
             tenant_id=uuid.uuid4(),
@@ -118,8 +114,8 @@ def test_execution_completed_event_rejects_invalid_status():
 
 
 def test_memory_written_event_rejects_invalid_type():
-    import pytest
     from pydantic import ValidationError
+
     with pytest.raises(ValidationError):
         MemoryWrittenEvent(
             tenant_id=uuid.uuid4(),
