@@ -2,7 +2,7 @@ import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 from app.retrieval.searcher import Searcher
-from app.retrieval.reranker import CandidateRow
+from app.retrieval.reranker import CandidateRow, ScoredCandidate
 from app.retrieval.embedder import Embedder
 
 

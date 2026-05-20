@@ -1,7 +1,7 @@
 import pytest
 import math
 from datetime import datetime, timezone, timedelta
-from app.retrieval.reranker import rerank, recency_score, CandidateRow
+from app.retrieval.reranker import rerank, recency_score, CandidateRow, ScoredCandidate
 
 
 def make_candidate(
@@ -44,7 +44,7 @@ def test_rerank_higher_similarity_wins_when_all_else_equal():
     low = make_candidate(similarity=0.5, accessed_at=now, access_count=0)
     high = make_candidate(similarity=0.9, accessed_at=now, access_count=0)
     results = rerank([low, high], top_k=2, half_life_days=30.0)
-    assert results[0].similarity == 0.9
+    assert results[0].candidate.similarity == 0.9
 
 
 def test_rerank_access_count_capped_to_prevent_domination():
@@ -54,4 +54,16 @@ def test_rerank_access_count_capped_to_prevent_domination():
     high_sim = make_candidate(similarity=0.95, accessed_at=now, access_count=0)
     results = rerank([high_access, high_sim], top_k=2, half_life_days=30.0)
     # High similarity should rank first despite low access_count
-    assert results[0].similarity == 0.95
+    assert results[0].candidate.similarity == 0.95
+
+
+def test_rerank_returns_scored_candidates():
+    """rerank() should return ScoredCandidate instances with .score and .candidate fields."""
+    now = datetime.now(timezone.utc)
+    candidates = [make_candidate(similarity=0.8, accessed_at=now, access_count=1)]
+    results = rerank(candidates, top_k=1, half_life_days=30.0)
+    assert len(results) == 1
+    assert isinstance(results[0], ScoredCandidate)
+    assert hasattr(results[0], "score")
+    assert hasattr(results[0], "candidate")
+    assert results[0].candidate.similarity == 0.8
