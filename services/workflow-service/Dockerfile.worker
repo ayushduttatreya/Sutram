@@ -1,0 +1,14 @@
+# Dockerfile.worker
+FROM python:3.11-slim
+WORKDIR /app
+
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev --no-install-project
+
+COPY app/ ./app/
+
+CMD ["uv", "run", "celery", "-A", "app.tasks.celery_app.celery_app", "worker", \
+     "--concurrency=4", "-Q", "default", "--loglevel=info"]
