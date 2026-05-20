@@ -1,3 +1,4 @@
+# packages/core/tests/conftest.py
 import pytest
 import fakeredis
 import fakeredis.aioredis
@@ -9,3 +10,11 @@ async def fake_redis():
     client = fakeredis.aioredis.FakeRedis(server=server)
     yield client
     await client.aclose()
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    """Clear lru_cache on get_settings between tests to prevent pollution."""
+    yield
+    from sutram_core.settings import get_settings
+    get_settings.cache_clear()
