@@ -1,8 +1,11 @@
 # tests/unit/test_orm_models.py
-import pytest
 from app.models.orm import (
-    TenantORM, WorkflowORM, WorkflowExecutionORM,
-    CheckpointORM, WebhookSubscriptionORM, WebhookDeliveryORM,
+    CheckpointORM,
+    TenantORM,
+    WebhookDeliveryORM,
+    WebhookSubscriptionORM,
+    WorkflowExecutionORM,
+    WorkflowORM,
 )
 
 
@@ -35,7 +38,12 @@ def test_webhook_subscription_has_secret_encrypted_not_hash():
 
 
 def test_all_tenant_tables_have_tenant_id():
-    for model in [WorkflowORM, WorkflowExecutionORM, CheckpointORM,
-                  WebhookSubscriptionORM, WebhookDeliveryORM]:
+    for model in [
+        WorkflowORM,
+        WorkflowExecutionORM,
+        CheckpointORM,
+        WebhookSubscriptionORM,
+        WebhookDeliveryORM,
+    ]:
         cols = {c.key for c in model.__table__.columns}
         assert "tenant_id" in cols, f"{model.__tablename__} missing tenant_id"

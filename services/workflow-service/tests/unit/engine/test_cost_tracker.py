@@ -1,5 +1,5 @@
 import pytest
-from app.engine.cost_tracker import CostTracker, CostLimitExceeded
+from app.engine.cost_tracker import CostLimitExceeded, CostTracker
 
 
 def test_tracker_starts_at_zero():

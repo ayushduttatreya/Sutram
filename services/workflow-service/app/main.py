@@ -1,14 +1,16 @@
 from __future__ import annotations
+
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.dependencies import init_db, init_redis, close_redis
-from app.routes import workflows, executions, webhooks, internal
+from app.dependencies import close_redis, init_db, init_redis
+from app.routes import executions, internal, webhooks, workflows
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     init_db()
     init_redis()
     yield

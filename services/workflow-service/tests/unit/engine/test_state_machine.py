@@ -1,6 +1,6 @@
 import pytest
-from sutram_core.models.execution import ExecutionStatus
 from app.engine.state_machine import ExecutionFSM, InvalidTransitionError
+from sutram_core.models.execution import ExecutionStatus
 
 
 def test_pending_to_running():
@@ -39,9 +39,10 @@ def test_running_to_failed_on_max_retries():
     assert fsm.transition("max_retries_exceeded") == ExecutionStatus.FAILED
 
 
-def test_paused_to_running_on_resume():
+def test_paused_to_pending_on_resume():
+    """Resume re-queues as PENDING — the worker transitions PENDING→RUNNING on pickup."""
     fsm = ExecutionFSM(ExecutionStatus.PAUSED)
-    assert fsm.transition("resume") == ExecutionStatus.RUNNING
+    assert fsm.transition("resume") == ExecutionStatus.PENDING
 
 
 def test_paused_to_cancelled_on_cancel():

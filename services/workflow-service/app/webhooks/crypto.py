@@ -8,7 +8,9 @@ InvalidTag, preventing silent decryption of corrupted data.
 Key format: 64 hex characters = 32 bytes (AES-256).
 Ciphertext format: hex-encoded (nonce[12] || ciphertext+tag).
 """
+
 from __future__ import annotations
+
 import os
 import secrets
 

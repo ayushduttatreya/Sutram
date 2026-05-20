@@ -1,5 +1,6 @@
 # app/routes/workflows.py
 from __future__ import annotations
+
 import uuid
 from typing import Annotated
 
@@ -20,7 +21,7 @@ DBSession = Annotated[AsyncSession, Depends(get_db_session)]
 async def create_workflow(
     body: CreateWorkflowRequest,
     session: DBSession,
-    tenant_id: uuid.UUID = Query(..., description="Tenant ID from auth middleware"),
+    tenant_id: uuid.UUID = Query(..., description="Tenant ID from auth middleware"),  # noqa: B008
 ) -> WorkflowORM:
     wf = WorkflowORM(
         id=uuid.uuid4(),
@@ -39,9 +40,7 @@ async def get_workflow(
     workflow_id: uuid.UUID,
     session: DBSession,
 ) -> WorkflowORM:
-    result = await session.execute(
-        select(WorkflowORM).where(WorkflowORM.id == workflow_id)
-    )
+    result = await session.execute(select(WorkflowORM).where(WorkflowORM.id == workflow_id))
     wf = result.scalar_one_or_none()
     if wf is None:
         raise HTTPException(status_code=404, detail="Workflow not found")

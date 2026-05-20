@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from sutram_core.models.execution import ExecutionStatus
 
 # Valid transitions: {current_status: {trigger: next_status}}
@@ -15,7 +16,8 @@ _TRANSITIONS: dict[ExecutionStatus, dict[str, ExecutionStatus]] = {
         "max_retries_exceeded": ExecutionStatus.FAILED,
     },
     ExecutionStatus.PAUSED: {
-        "resume": ExecutionStatus.RUNNING,
+        # API re-queues as PENDING; worker transitions PENDING→RUNNING on pickup
+        "resume": ExecutionStatus.PENDING,
         "cancel": ExecutionStatus.CANCELLED,
     },
     # COMPLETED, FAILED, CANCELLED are terminal — no valid outbound transitions

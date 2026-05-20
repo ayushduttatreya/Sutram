@@ -7,7 +7,7 @@ class CostLimitExceeded(Exception):
 
 
 class CostTracker:
-    """Accumulates cost for a single workflow execution and enforces per-execution and daily limits."""
+    """Accumulates cost for a workflow execution and enforces per-execution and daily limits."""
 
     def __init__(self, max_per_execution: float, max_per_day: float) -> None:
         self._max_per_execution = max_per_execution

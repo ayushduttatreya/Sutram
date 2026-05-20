@@ -7,28 +7,29 @@ Core invariants:
 4. Both streams published on every event: 'executions' (global) and 'execution:{id}' (SSE)
 5. On startup: if execution is already terminal (acks_late redelivery), raise and exit cleanly
 """
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from sutram_core.events.base import BaseEvent
 from sutram_core.locking.redis_lock import RedisLock
 from sutram_core.models.execution import ExecutionStatus
 from sutram_core.streams.redis_streams import StreamProducer
-from sutram_core.events.base import BaseEvent
 
-from app.engine.state_machine import ExecutionFSM, InvalidTransitionError
 from app.models.orm import WorkflowExecutionORM
 
 _UNSET: object = object()
 
-_TERMINAL_STATUSES = frozenset({
-    ExecutionStatus.COMPLETED.value,
-    ExecutionStatus.FAILED.value,
-    ExecutionStatus.CANCELLED.value,
-})
+_TERMINAL_STATUSES = frozenset(
+    {
+        ExecutionStatus.COMPLETED.value,
+        ExecutionStatus.FAILED.value,
+        ExecutionStatus.CANCELLED.value,
+    }
+)
 
 
 class ExecutionAlreadyTerminal(Exception):
@@ -88,8 +89,8 @@ class Executor:
         execution_orm: WorkflowExecutionORM,
         new_status: ExecutionStatus,
         *,
-        error_message: str | None = _UNSET,   # type: ignore[assignment]
-        pause_reason: str | None = _UNSET,     # type: ignore[assignment]
+        error_message: str | None = _UNSET,  # type: ignore[assignment]
+        pause_reason: str | None = _UNSET,  # type: ignore[assignment]
     ) -> None:
         """Persist status change and heartbeat renewal via current session.
 
@@ -98,7 +99,7 @@ class Executor:
         Omit the keyword entirely to leave the column unchanged.
         """
         execution_orm.status = new_status.value
-        execution_orm.last_heartbeat = datetime.now(timezone.utc)
+        execution_orm.last_heartbeat = datetime.now(UTC)
         if error_message is not _UNSET:
             execution_orm.error_message = error_message
         if pause_reason is not _UNSET:

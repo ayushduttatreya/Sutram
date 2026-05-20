@@ -1,12 +1,13 @@
 # app/engine/checkpoint.py
 from __future__ import annotations
+
 import uuid
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sutram_core.models.workflow import StepConfig
+
 from app.models.orm import CheckpointORM
 
 
@@ -22,7 +23,7 @@ class CheckpointManager:
 
     def should_checkpoint(self, step: StepConfig) -> bool:
         """Return True if a checkpoint should be written before this step."""
-        return step.checkpoint_before
+        return bool(step.checkpoint_before)
 
     async def write(
         self,

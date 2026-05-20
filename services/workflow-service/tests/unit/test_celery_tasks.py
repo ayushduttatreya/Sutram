@@ -1,4 +1,8 @@
 # tests/unit/test_celery_tasks.py
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from app.tasks.celery_app import celery_app
 
 
@@ -27,11 +31,6 @@ def test_execute_workflow_task_max_retries():
     assert task.max_retries == 0
 
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-import uuid
-
-
 @pytest.mark.asyncio
 async def test_run_returns_silently_when_execution_not_found():
     mock_session = AsyncMock()
@@ -45,7 +44,17 @@ async def test_run_returns_silently_when_execution_not_found():
 
     with patch("app.dependencies.get_db_session_context", return_value=mock_ctx):
         from app.tasks.execute import _run
+
         await _run(str(uuid.uuid4()))  # should complete without raising
+
+
+def test_deliver_webhook_task_registered():
+    assert "webhook.deliver" in celery_app.tasks
+
+
+def test_deliver_webhook_task_max_retries():
+    task = celery_app.tasks["webhook.deliver"]
+    assert task.max_retries == 5  # len(RETRY_DELAYS)
 
 
 @pytest.mark.asyncio
@@ -67,4 +76,5 @@ async def test_run_returns_silently_when_execution_already_terminal():
 
     with patch("app.dependencies.get_db_session_context", return_value=mock_ctx):
         from app.tasks.execute import _run
+
         await _run(str(uuid.uuid4()))  # should complete without raising

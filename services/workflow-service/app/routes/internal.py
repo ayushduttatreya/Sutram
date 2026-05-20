@@ -7,7 +7,9 @@ middleware (to be wired in a later task).
 RLS note: internal endpoints bypass tenant RLS since they may be called without a
 tenant context (e.g., fetching tenant settings to verify a new tenant_id).
 """
+
 from __future__ import annotations
+
 import uuid
 from typing import Annotated
 
@@ -27,14 +29,12 @@ DBSession = Annotated[AsyncSession, Depends(get_db_session)]
 async def get_tenant(
     tenant_id: uuid.UUID,
     session: DBSession,
-) -> dict:
+) -> dict[str, object]:
     """Return tenant settings for inter-service use.
 
     Called by memory-service and observability-service to resolve tenant limits.
     """
-    result = await session.execute(
-        select(TenantORM).where(TenantORM.id == tenant_id)
-    )
+    result = await session.execute(select(TenantORM).where(TenantORM.id == tenant_id))
     tenant = result.scalar_one_or_none()
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")

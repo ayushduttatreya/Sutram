@@ -9,22 +9,25 @@ Design notes:
   loads the latest checkpoint and resumes from there.
 - ExecutionAlreadyTerminal: guards against acks_late redelivery after completion.
 """
+
 from __future__ import annotations
 
 import asyncio
 import uuid
 
+from celery import Task
+
 from app.tasks.celery_app import celery_app
 
 
-@celery_app.task(
+@celery_app.task(  # type: ignore[untyped-decorator]
     name="workflow.execute",
     bind=True,
     max_retries=0,
     acks_late=True,
     reject_on_worker_lost=True,
 )
-def execute_workflow(self, execution_id: str) -> None:
+def execute_workflow(self: Task, execution_id: str) -> None:
     """Entry point for Celery workers. Runs async executor in a new event loop."""
     asyncio.run(_run(execution_id))
 
@@ -32,15 +35,14 @@ def execute_workflow(self, execution_id: str) -> None:
 async def _run(execution_id: str) -> None:
     """Async implementation — separated so it can be tested without Celery infrastructure."""
     from sqlalchemy import select
+
     from app.dependencies import get_db_session_context, get_redis_lock, get_stream_producers
-    from app.engine.executor import Executor, ExecutionAlreadyTerminal
+    from app.engine.executor import ExecutionAlreadyTerminal, Executor
     from app.models.orm import WorkflowExecutionORM
 
     async with get_db_session_context() as session:
         result = await session.execute(
-            select(WorkflowExecutionORM).where(
-                WorkflowExecutionORM.id == uuid.UUID(execution_id)
-            )
+            select(WorkflowExecutionORM).where(WorkflowExecutionORM.id == uuid.UUID(execution_id))
         )
         execution = result.scalar_one_or_none()
         if execution is None:
@@ -63,4 +65,5 @@ async def _run(execution_id: str) -> None:
         )
 
         from sutram_core.models.execution import ExecutionStatus
+
         await executor._update_status(execution, ExecutionStatus.RUNNING)

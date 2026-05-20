@@ -5,7 +5,7 @@ from functools import lru_cache
 from sutram_core.settings import CoreSettings
 
 
-class WorkflowServiceSettings(CoreSettings):
+class WorkflowServiceSettings(CoreSettings):  # type: ignore[misc]
     # inherits model_config from CoreSettings — no need to redeclare
 
     # Separate Redis logical DBs (avoids cross-concern key collisions)

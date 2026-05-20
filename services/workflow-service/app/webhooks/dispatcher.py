@@ -5,13 +5,15 @@ The raw secret is retrieved by decrypting the AES-GCM ciphertext stored in
 webhook_subscriptions.secret_encrypted via app.webhooks.crypto.decrypt_secret().
 Signature format: 'sha256={hexdigest}' in X-Sutram-Signature header.
 """
+
 from __future__ import annotations
+
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
-from typing import Any
 import uuid
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
@@ -42,7 +44,7 @@ class WebhookDispatcher:
         """
         payload_with_meta = {
             **payload,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "delivery_id": str(uuid.uuid4()),
         }
         payload_bytes = json.dumps(payload_with_meta, separators=(",", ":")).encode()

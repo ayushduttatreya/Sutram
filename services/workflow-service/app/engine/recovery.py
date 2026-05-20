@@ -11,12 +11,14 @@ Design:
   In development, the superuser role bypasses RLS. In production, use a SECURITY DEFINER
   function or connect with a role that has BYPASSRLS privilege.
 """
+
 from __future__ import annotations
+
 import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 
-from sutram_core.locking.redis_lock import RedisLock, LockAcquisitionError
+from sutram_core.locking.redis_lock import LockAcquisitionError, RedisLock
 
 
 class RecoveryHandler:
@@ -61,6 +63,7 @@ class RecoveryHandler:
         for graceful shutdown.
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
         while True:

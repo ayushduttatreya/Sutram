@@ -1,12 +1,14 @@
-import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from app.engine.executor import ExecutionAlreadyTerminal, Executor
 from sutram_core.models.execution import ExecutionStatus
-from app.engine.executor import Executor, ExecutionAlreadyTerminal
 
 
 def make_mock_execution(status: ExecutionStatus = ExecutionStatus.PENDING):
     from app.models.orm import WorkflowExecutionORM
+
     orm = MagicMock(spec=WorkflowExecutionORM)
     orm.id = uuid.uuid4()
     orm.tenant_id = uuid.uuid4()
@@ -30,6 +32,7 @@ def make_mock_execution(status: ExecutionStatus = ExecutionStatus.PENDING):
 def make_executor(session=None, lock=None, producer_global=None, producer_sse=None):
     from sutram_core.locking.redis_lock import RedisLock
     from sutram_core.streams.redis_streams import StreamProducer
+
     return Executor(
         session=session or AsyncMock(),
         lock=lock or MagicMock(spec=RedisLock),
@@ -73,6 +76,7 @@ async def test_publish_sends_to_both_streams():
     executor = make_executor(producer_global=global_producer, producer_sse=sse_producer)
 
     from sutram_core.events.execution import ExecutionStartedEvent
+
     event = ExecutionStartedEvent(
         tenant_id=uuid.uuid4(),
         execution_id=uuid.uuid4(),
@@ -109,9 +113,7 @@ async def test_update_status_sets_error_message():
     executor = make_executor(session=session)
     execution = make_mock_execution(ExecutionStatus.RUNNING)
 
-    await executor._update_status(
-        execution, ExecutionStatus.FAILED, error_message="step failed"
-    )
+    await executor._update_status(execution, ExecutionStatus.FAILED, error_message="step failed")
 
     assert execution.status == ExecutionStatus.FAILED.value
     assert execution.error_message == "step failed"
@@ -143,9 +145,7 @@ async def test_update_status_clears_pause_reason_when_passed_none():
     execution = make_mock_execution(ExecutionStatus.PAUSED)
     execution.pause_reason = "cost_limit_exceeded"
 
-    await executor._update_status(
-        execution, ExecutionStatus.RUNNING, pause_reason=None
-    )
+    await executor._update_status(execution, ExecutionStatus.RUNNING, pause_reason=None)
 
     assert execution.status == ExecutionStatus.RUNNING.value
     assert execution.pause_reason is None  # explicitly cleared

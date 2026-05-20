@@ -1,7 +1,6 @@
 # app/routes/webhooks.py
 from __future__ import annotations
-import hashlib
-import secrets
+
 import uuid
 from typing import Annotated
 
@@ -12,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db_session
 from app.models.orm import WebhookSubscriptionORM
-from app.webhooks.crypto import generate_webhook_secret, encrypt_secret
 from app.settings import get_settings
+from app.webhooks.crypto import encrypt_secret, generate_webhook_secret
 
 router = APIRouter(tags=["webhooks"])
 
@@ -36,6 +35,7 @@ class WebhookSubscriptionResponse(BaseModel):
 
 class WebhookRegistrationResponse(BaseModel):
     """Returned ONLY at registration time. Secret is shown once and never stored plaintext."""
+
     id: uuid.UUID
     tenant_id: uuid.UUID
     url: str
@@ -47,8 +47,8 @@ class WebhookRegistrationResponse(BaseModel):
 async def create_webhook(
     body: WebhookSubscriptionCreate,
     session: DBSession,
-    tenant_id: uuid.UUID = Query(...),
-) -> dict:
+    tenant_id: uuid.UUID = Query(...),  # noqa: B008
+) -> dict[str, object]:
     settings = get_settings()
     raw_secret = generate_webhook_secret()
     encrypted = encrypt_secret(raw_secret, settings.webhook_secret_encryption_key)
@@ -76,7 +76,7 @@ async def create_webhook(
 @router.get("/webhooks", response_model=list[WebhookSubscriptionResponse])
 async def list_webhooks(
     session: DBSession,
-    tenant_id: uuid.UUID = Query(...),
+    tenant_id: uuid.UUID = Query(...),  # noqa: B008
 ) -> list[WebhookSubscriptionORM]:
     result = await session.execute(
         select(WebhookSubscriptionORM).where(
@@ -91,7 +91,7 @@ async def list_webhooks(
 async def delete_webhook(
     webhook_id: uuid.UUID,
     session: DBSession,
-    tenant_id: uuid.UUID = Query(...),
+    tenant_id: uuid.UUID = Query(...),  # noqa: B008
 ) -> None:
     result = await session.execute(
         select(WebhookSubscriptionORM).where(

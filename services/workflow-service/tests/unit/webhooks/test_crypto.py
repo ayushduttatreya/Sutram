@@ -1,6 +1,6 @@
 import pytest
+from app.webhooks.crypto import decrypt_secret, encrypt_secret, generate_webhook_secret
 from cryptography.exceptions import InvalidTag
-from app.webhooks.crypto import encrypt_secret, decrypt_secret, generate_webhook_secret
 
 
 def test_generate_secret_is_64_hex_chars():
@@ -56,5 +56,5 @@ def test_ciphertext_length_is_nonce_plus_tag_plus_plaintext():
 
 def test_invalid_key_length_raises():
     """Key must be exactly 32 bytes (64 hex chars). 31-byte key is valid hex but wrong AES size."""
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         encrypt_secret("secret", "aa" * 31)  # 62 hex chars = 31 bytes, not a valid AES key size

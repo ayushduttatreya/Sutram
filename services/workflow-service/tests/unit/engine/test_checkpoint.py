@@ -1,8 +1,9 @@
-import pytest
 import uuid
-from unittest.mock import AsyncMock, MagicMock, call
-from sutram_core.models.workflow import StepConfig
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from app.engine.checkpoint import CheckpointManager
+from sutram_core.models.workflow import StepConfig
 
 
 @pytest.mark.asyncio
@@ -31,7 +32,7 @@ async def test_write_adds_checkpoint_orm_to_session():
     execution_id = uuid.uuid4()
     tenant_id = uuid.uuid4()
 
-    result = await manager.write(
+    await manager.write(
         execution_id=execution_id,
         tenant_id=tenant_id,
         step_name="fetch_sources",
@@ -47,7 +48,7 @@ async def test_write_adds_checkpoint_orm_to_session():
     assert orm_arg.variables == {"results": ["a", "b"]}
     assert orm_arg.schema_version == 1
     assert orm_arg.tenant_id == tenant_id
-    assert orm_arg.state == {}   # default when state=None is passed
+    assert orm_arg.state == {}  # default when state=None is passed
     session.flush.assert_called_once()
 
 
@@ -67,12 +68,14 @@ async def test_write_returns_checkpoint_orm():
     )
 
     from app.models.orm import CheckpointORM
+
     assert isinstance(result, CheckpointORM)
 
 
 @pytest.mark.asyncio
 async def test_get_latest_returns_none_when_no_checkpoints():
     from unittest.mock import MagicMock
+
     session = AsyncMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
@@ -86,6 +89,7 @@ async def test_get_latest_returns_none_when_no_checkpoints():
 @pytest.mark.asyncio
 async def test_get_latest_returns_checkpoint_when_found():
     from unittest.mock import MagicMock
+
     from app.models.orm import CheckpointORM
 
     session = AsyncMock()

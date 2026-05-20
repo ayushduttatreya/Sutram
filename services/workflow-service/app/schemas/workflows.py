@@ -1,10 +1,11 @@
 # app/schemas/workflows.py
 from __future__ import annotations
+
 from typing import Any
 from uuid import UUID
+
 from pydantic import BaseModel
 from sutram_core.models.workflow import WorkflowDefinition
-from sutram_core.models.execution import ExecutionStatus
 
 
 class CreateWorkflowRequest(BaseModel):

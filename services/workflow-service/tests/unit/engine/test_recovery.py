@@ -1,8 +1,9 @@
-import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock
-from sutram_core.locking.redis_lock import LockAcquisitionError
+
+import pytest
 from app.engine.recovery import RecoveryHandler
+from sutram_core.locking.redis_lock import LockAcquisitionError
 
 
 @pytest.mark.asyncio
@@ -56,6 +57,7 @@ async def test_run_forever_calls_get_stale_and_recover(monkeypatch):
         raise asyncio.CancelledError  # stop the loop after first iteration
 
     import asyncio
+
     mock_lock = MagicMock()
     ctx = AsyncMock()
     ctx.__aenter__ = AsyncMock(return_value="token")

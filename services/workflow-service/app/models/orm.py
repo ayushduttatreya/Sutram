@@ -1,43 +1,43 @@
 # services/workflow-service/app/models/orm.py
 from __future__ import annotations
-from datetime import datetime, timezone
-from typing import Any
+
 import uuid
+from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
-    String, Text, Integer, Boolean, DateTime,
-    ForeignKey, Index, CheckConstraint, text,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    text,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from sutram_core.db.base import Base, TimestampMixin
 
 
-class TenantORM(Base, TimestampMixin):
+class TenantORM(Base, TimestampMixin):  # type: ignore[misc]
     __tablename__ = "tenants"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     settings: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("{}")
     )
 
-    workflows: Mapped[list["WorkflowORM"]] = relationship(back_populates="tenant")
-    executions: Mapped[list["WorkflowExecutionORM"]] = relationship(back_populates="tenant")
+    workflows: Mapped[list[WorkflowORM]] = relationship(back_populates="tenant")
+    executions: Mapped[list[WorkflowExecutionORM]] = relationship(back_populates="tenant")
 
 
-class WorkflowORM(Base, TimestampMixin):
+class WorkflowORM(Base, TimestampMixin):  # type: ignore[misc]
     __tablename__ = "workflows"
-    __table_args__ = (
-        Index("idx_workflows_tenant_id", "tenant_id"),
-    )
+    __table_args__ = (Index("idx_workflows_tenant_id", "tenant_id"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
@@ -46,11 +46,11 @@ class WorkflowORM(Base, TimestampMixin):
     definition: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
-    tenant: Mapped["TenantORM"] = relationship(back_populates="workflows")
-    executions: Mapped[list["WorkflowExecutionORM"]] = relationship(back_populates="workflow")
+    tenant: Mapped[TenantORM] = relationship(back_populates="workflows")
+    executions: Mapped[list[WorkflowExecutionORM]] = relationship(back_populates="workflow")
 
 
-class WorkflowExecutionORM(Base, TimestampMixin):
+class WorkflowExecutionORM(Base, TimestampMixin):  # type: ignore[misc]
     __tablename__ = "workflow_executions"
     __table_args__ = (
         Index("idx_executions_tenant_id", "tenant_id"),
@@ -66,9 +66,7 @@ class WorkflowExecutionORM(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
@@ -81,16 +79,14 @@ class WorkflowExecutionORM(Base, TimestampMixin):
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     pause_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_heartbeat: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    tenant: Mapped["TenantORM"] = relationship(back_populates="executions")
-    workflow: Mapped["WorkflowORM"] = relationship(back_populates="executions")
-    checkpoints: Mapped[list["CheckpointORM"]] = relationship(back_populates="execution")
+    tenant: Mapped[TenantORM] = relationship(back_populates="executions")
+    workflow: Mapped[WorkflowORM] = relationship(back_populates="executions")
+    checkpoints: Mapped[list[CheckpointORM]] = relationship(back_populates="execution")
 
 
-class CheckpointORM(Base):
+class CheckpointORM(Base):  # type: ignore[misc]
     """Append-only — no updated_at. Checkpoints are immutable once written."""
 
     __tablename__ = "checkpoints"
@@ -99,9 +95,7 @@ class CheckpointORM(Base):
         Index("idx_checkpoints_execution_latest", "execution_id", "step_index"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     execution_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("workflow_executions.id", ondelete="CASCADE"),
@@ -121,10 +115,10 @@ class CheckpointORM(Base):
         nullable=False,
     )
 
-    execution: Mapped["WorkflowExecutionORM"] = relationship(back_populates="checkpoints")
+    execution: Mapped[WorkflowExecutionORM] = relationship(back_populates="checkpoints")
 
 
-class WebhookSubscriptionORM(Base, TimestampMixin):
+class WebhookSubscriptionORM(Base, TimestampMixin):  # type: ignore[misc]
     __tablename__ = "webhook_subscriptions"
     __table_args__ = (
         Index(
@@ -134,9 +128,7 @@ class WebhookSubscriptionORM(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     # AES-GCM encrypted secret — must be decryptable for HMAC signing (not a hash)
@@ -146,10 +138,10 @@ class WebhookSubscriptionORM(Base, TimestampMixin):
     )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    deliveries: Mapped[list["WebhookDeliveryORM"]] = relationship(back_populates="subscription")
+    deliveries: Mapped[list[WebhookDeliveryORM]] = relationship(back_populates="subscription")
 
 
-class WebhookDeliveryORM(Base, TimestampMixin):
+class WebhookDeliveryORM(Base, TimestampMixin):  # type: ignore[misc]
     __tablename__ = "webhook_deliveries"
     __table_args__ = (
         Index("idx_webhook_deliveries_tenant", "tenant_id"),
@@ -164,9 +156,7 @@ class WebhookDeliveryORM(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     subscription_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("webhook_subscriptions.id", ondelete="CASCADE"),
@@ -183,4 +173,4 @@ class WebhookDeliveryORM(Base, TimestampMixin):
     response_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     response_body: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    subscription: Mapped["WebhookSubscriptionORM"] = relationship(back_populates="deliveries")
+    subscription: Mapped[WebhookSubscriptionORM] = relationship(back_populates="deliveries")
