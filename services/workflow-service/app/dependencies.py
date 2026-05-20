@@ -32,6 +32,17 @@ def init_redis() -> None:
     _redis_locks = aioredis.from_url(settings.redis_locks_url)
 
 
+async def close_redis() -> None:
+    """Close Redis connections on shutdown."""
+    global _redis_streams, _redis_locks
+    if _redis_streams is not None:
+        await _redis_streams.aclose()
+        _redis_streams = None
+    if _redis_locks is not None:
+        await _redis_locks.aclose()
+        _redis_locks = None
+
+
 def get_redis_lock() -> RedisLock:
     if _redis_locks is None:
         raise RuntimeError("Redis not initialised — call init_redis() at startup")
