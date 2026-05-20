@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import redis.asyncio as aioredis
+
 from ..events.base import BaseEvent
 
 
@@ -10,7 +12,7 @@ class StreamProducer:
     async def publish(self, stream: str, event: BaseEvent) -> str:
         """Publish event to Redis Stream. Returns message ID as string."""
         data = event.to_stream_dict()
-        message_id = await self._redis.xadd(stream, data)
+        message_id = await self._redis.xadd(stream, data)  # type: ignore[arg-type]
         return message_id.decode() if isinstance(message_id, bytes) else message_id
 
 
@@ -50,7 +52,9 @@ class StreamConsumerGroup:
             for message_id, fields in entries:
                 msg_id = message_id.decode() if isinstance(message_id, bytes) else message_id
                 decoded = {
-                    (k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
+                    (k.decode() if isinstance(k, bytes) else k): (
+                        v.decode() if isinstance(v, bytes) else v
+                    )
                     for k, v in fields.items()
                 }
                 messages.append((msg_id, decoded))

@@ -1,14 +1,17 @@
 # packages/core/sutram_core/models/memory.py
 from __future__ import annotations
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any
+
 import uuid
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
+
 from pydantic import Field
+
 from .base import SutramBaseModel
 
 
-class MemoryType(str, Enum):
+class MemoryType(StrEnum):
     EPISODIC = "episodic"
     SEMANTIC = "semantic"
     PROCEDURAL = "procedural"
@@ -21,7 +24,7 @@ class MemoryItem(SutramBaseModel):
     embedding: list[float] = Field(default_factory=list)
     embedding_model: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
-    accessed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    accessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     access_count: int = 0
     retention_policy: str = "90d"
     compressed: bool = False

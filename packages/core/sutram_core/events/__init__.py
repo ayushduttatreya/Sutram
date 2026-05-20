@@ -1,12 +1,12 @@
 from .base import BaseEvent
 from .execution import (
+    ExecutionCompletedEvent,
+    ExecutionPausedEvent,
     ExecutionStartedEvent,
     StepCompletedEvent,
     StepFailedEvent,
-    ExecutionCompletedEvent,
-    ExecutionPausedEvent,
 )
-from .memory import MemoryWrittenEvent, MemorySearchedEvent
+from .memory import MemorySearchedEvent, MemoryWrittenEvent
 
 __all__ = [
     "BaseEvent",

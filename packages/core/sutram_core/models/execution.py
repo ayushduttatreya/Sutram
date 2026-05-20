@@ -1,13 +1,16 @@
 # packages/core/sutram_core/models/execution.py
 from __future__ import annotations
-from enum import Enum
-from typing import Any
+
 import uuid
+from enum import StrEnum
+from typing import Any
+
 from pydantic import BaseModel
+
 from .base import SutramBaseModel
 
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     PAUSED = "PAUSED"

@@ -1,6 +1,7 @@
 import json
-from datetime import datetime, timezone
 import uuid
+from datetime import UTC, datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -8,7 +9,7 @@ class BaseEvent(BaseModel):
     event_type: str
     trace_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     tenant_id: uuid.UUID
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     schema_version: int = 1
 
     def to_stream_dict(self) -> dict[str, str]:

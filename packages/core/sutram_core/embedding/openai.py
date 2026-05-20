@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import httpx
 
 
@@ -32,7 +33,7 @@ class OpenAIEmbedder:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def __aenter__(self) -> "OpenAIEmbedder":
+    async def __aenter__(self) -> OpenAIEmbedder:
         return self
 
     async def __aexit__(self, *args: object) -> None:

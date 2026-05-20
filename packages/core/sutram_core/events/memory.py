@@ -1,7 +1,9 @@
 import uuid
 from typing import Literal
-from .base import BaseEvent
+
 from sutram_core.models.memory import MemoryType
+
+from .base import BaseEvent
 
 
 class MemoryWrittenEvent(BaseEvent):

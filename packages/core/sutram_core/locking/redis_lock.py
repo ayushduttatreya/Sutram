@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import asyncio
 import uuid
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager, suppress
+
 import redis.asyncio as aioredis
 
 # Lua script: atomically release lock only if we own it
@@ -45,19 +47,15 @@ class RedisLock:
         if not acquired:
             raise LockAcquisitionError(f"Could not acquire lock: {key}")
 
-        heartbeat_task = asyncio.create_task(
-            self._renew_heartbeat(key, token, ttl_seconds)
-        )
+        heartbeat_task = asyncio.create_task(self._renew_heartbeat(key, token, ttl_seconds))
         try:
             yield token
         finally:
             heartbeat_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await heartbeat_task
-            except asyncio.CancelledError:
-                pass
             # Atomically check ownership and delete in one round-trip
-            await self._redis.eval(_RELEASE_SCRIPT, 1, key, token)
+            await self._redis.eval(_RELEASE_SCRIPT, 1, key, token)  # type: ignore[misc]
 
     async def _renew_heartbeat(self, key: str, token: str, ttl_seconds: int) -> None:
         """Renew lock TTL every ttl/2 seconds while held."""

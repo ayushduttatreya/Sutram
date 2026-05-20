@@ -1,6 +1,8 @@
 # packages/core/sutram_core/middleware/rate_limit.py
 from __future__ import annotations
+
 import time
+
 import redis.asyncio as aioredis
 
 # Lua script: atomically increment counter and set TTL on first request.
@@ -46,9 +48,7 @@ class RateLimiter:
         window = int(time.time()) // self._WINDOW_SECONDS
         key = f"rate:{tenant_id}:{window}"
 
-        count = await self._redis.eval(
-            _INCR_WITH_TTL_SCRIPT, 1, key, self._TTL_SECONDS
-        )
+        count = await self._redis.eval(_INCR_WITH_TTL_SCRIPT, 1, key, self._TTL_SECONDS)  # type: ignore[misc]
 
         if count > self._requests_per_minute:
             raise RateLimitExceeded(tenant_id, self._requests_per_minute)

@@ -1,3 +1,3 @@
-from .redis_lock import RedisLock, LockAcquisitionError
+from .redis_lock import LockAcquisitionError, RedisLock
 
 __all__ = ["RedisLock", "LockAcquisitionError"]

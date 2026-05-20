@@ -1,7 +1,10 @@
 # packages/core/sutram_core/models/checkpoint.py
 from __future__ import annotations
-from typing import Any, Callable, ClassVar
+
 import uuid
+from collections.abc import Callable
+from typing import Any, ClassVar
+
 from .base import SutramBaseModel
 
 # Migrators: {from_version: callable(variables) -> variables}
@@ -21,7 +24,7 @@ class Checkpoint(SutramBaseModel):
     # Class-level migration registry — services register migrators here
     migrators: ClassVar[MigratorMap] = {}
 
-    def migrate_to_current(self) -> "Checkpoint":
+    def migrate_to_current(self) -> Checkpoint:
         """Apply registered migrators forward from schema_version to latest."""
         variables = self.variables
         version = self.schema_version

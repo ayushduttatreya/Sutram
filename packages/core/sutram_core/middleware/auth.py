@@ -1,7 +1,9 @@
 # packages/core/sutram_core/middleware/auth.py
 from __future__ import annotations
-from typing import Any
-from jose import jwt, JWTError, ExpiredSignatureError
+
+from typing import Any, cast
+
+from jose import ExpiredSignatureError, JWTError, jwt
 
 
 class AuthError(Exception):
@@ -15,12 +17,14 @@ class AuthError(Exception):
 def get_jwt_secret() -> str:
     """Returns JWT secret from settings. Patchable in tests."""
     from sutram_core.settings import get_settings
+
     return get_settings().jwt_secret
 
 
 def get_jwt_algorithm() -> str:
     """Returns JWT algorithm from settings. Patchable in tests."""
     from sutram_core.settings import get_settings
+
     return get_settings().jwt_algorithm
 
 
@@ -34,7 +38,7 @@ def decode_jwt(token: str, algorithm: str | None = None) -> dict[str, Any]:
     try:
         secret = get_jwt_secret()
         alg = algorithm or get_jwt_algorithm()
-        claims = jwt.decode(token, secret, algorithms=[alg])
+        claims: dict[str, Any] = cast(dict[str, Any], jwt.decode(token, secret, algorithms=[alg]))
         if "tenant_id" not in claims:
             raise AuthError("Missing tenant_id claim")
         if "exp" not in claims:
