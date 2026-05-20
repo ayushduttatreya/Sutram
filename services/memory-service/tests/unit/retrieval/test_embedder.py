@@ -1,12 +1,13 @@
-import pytest
-import json
-import uuid
 from unittest.mock import AsyncMock, MagicMock
-from sutram_core.embedding.registry import EmbeddingRegistry
+
+import pytest
 from app.retrieval.embedder import Embedder
+from sutram_core.embedding.registry import EmbeddingRegistry
 
 
-def make_registry(model_name: str = "text-embedding-3-small", dims: int = 1536) -> EmbeddingRegistry:
+def make_registry(
+    model_name: str = "text-embedding-3-small", dims: int = 1536
+) -> EmbeddingRegistry:
     registry = EmbeddingRegistry()
     provider = MagicMock()
     provider.model_name = model_name

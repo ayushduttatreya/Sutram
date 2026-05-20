@@ -1,17 +1,22 @@
 from __future__ import annotations
+
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from app.dependencies import (
-    init_db, init_redis, init_embedding,
-    close_redis, close_embedding,
+    close_embedding,
+    close_redis,
+    init_db,
+    init_embedding,
+    init_redis,
 )
 from app.routes import memory
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     init_db()
     init_redis()
     init_embedding()

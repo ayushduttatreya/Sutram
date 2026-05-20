@@ -1,31 +1,39 @@
 # services/memory-service/app/tasks/compress.py
 """Daily Celery beat task: compress old memories across all tenants."""
+
 from __future__ import annotations
+
 import asyncio
+from datetime import UTC
 
 from app.tasks.celery_app import celery_app
 
 
-@celery_app.task(name="memory.compress", acks_late=True)
+@celery_app.task(name="memory.compress", acks_late=True)  # type: ignore[untyped-decorator]
 def compress_memories() -> None:
     asyncio.run(_compress_all())
 
 
 async def _compress_all() -> None:
     import logging
+
     from sqlalchemy import text
-    from app.dependencies import get_db_session_context, get_embedder
+
     from app.compression.compressor import Compressor
+    from app.dependencies import get_db_session_context, get_embedder
 
     logger = logging.getLogger(__name__)
     embedder = get_embedder()
 
     # NOTE: No set_tenant_context — this job bypasses RLS to process all tenants
     async with get_db_session_context() as session:
+        from datetime import datetime as _dt
+        from datetime import timedelta
+
         from app.settings import get_settings as _gs
-        from datetime import timedelta, timezone, datetime as _dt
+
         _settings = _gs()
-        threshold = _dt.now(timezone.utc) - timedelta(days=_settings.compression_threshold_days)
+        threshold = _dt.now(UTC) - timedelta(days=_settings.compression_threshold_days)
         result = await session.execute(
             text(
                 "SELECT DISTINCT tenant_id FROM memory_items "

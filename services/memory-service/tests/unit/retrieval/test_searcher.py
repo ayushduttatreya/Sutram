@@ -1,9 +1,9 @@
-import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock
-from app.retrieval.searcher import Searcher
-from app.retrieval.reranker import CandidateRow, ScoredCandidate
+
+import pytest
 from app.retrieval.embedder import Embedder
+from app.retrieval.searcher import Searcher
 
 
 def make_mock_embedder() -> Embedder:
@@ -66,7 +66,9 @@ async def test_search_calls_embedder_once_per_distinct_model():
     # embed called twice — once per model
     assert embedder.embed.call_count == 2
     # Verify embed was called with the correct model names
-    call_models = [call.kwargs.get("model") or call.args[1] for call in embedder.embed.call_args_list]
+    call_models = [
+        call.kwargs.get("model") or call.args[1] for call in embedder.embed.call_args_list
+    ]
     assert "text-embedding-3-small" in call_models
     assert "text-embedding-ada-002" in call_models
 
@@ -113,7 +115,7 @@ async def test_search_defaults_to_all_memory_types_when_none():
         tenant_id=uuid.uuid4(),
         top_k=5,
         session=session,
-        memory_types=None,   # explicitly None — should default to all three types
+        memory_types=None,  # explicitly None — should default to all three types
     )
 
     ann_call = session.execute.call_args_list[1]

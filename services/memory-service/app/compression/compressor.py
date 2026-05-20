@@ -10,9 +10,12 @@ Process per tenant:
 
 NOTE: No set_tenant_context call — compression job bypasses RLS to process all tenants.
 """
+
 from __future__ import annotations
+
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 from sqlalchemy import select, update
@@ -20,11 +23,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.compression.archiver import Archiver
 from app.models.orm import MemoryItemORM, MemorySummaryORM
+from app.retrieval.embedder import Embedder
 from app.settings import get_settings
 
 
 class Compressor:
-    def __init__(self, session: AsyncSession, embedder) -> None:
+    def __init__(self, session: AsyncSession, embedder: Embedder) -> None:
         self._session = session
         self._embedder = embedder
 
@@ -36,7 +40,7 @@ class Compressor:
         Use via get_db_session_context() which commits on clean exit.
         """
         settings = get_settings()
-        threshold = datetime.now(timezone.utc) - timedelta(days=settings.compression_threshold_days)
+        threshold = datetime.now(UTC) - timedelta(days=settings.compression_threshold_days)
 
         result = await self._session.execute(
             select(MemoryItemORM)
@@ -53,9 +57,7 @@ class Compressor:
         if not items:
             return 0
 
-        combined = "\n\n---\n\n".join(
-            f"[{item.memory_type}] {item.content}" for item in items
-        )
+        combined = "\n\n---\n\n".join(f"[{item.memory_type}] {item.content}" for item in items)
         summary_text = await self._summarize(combined)
 
         vector = await self._embedder.embed(summary_text, model=settings.default_embedding_model)
@@ -92,13 +94,14 @@ class Compressor:
         except Exception as e:
             # Log but don't block compression if S3 is unavailable in dev
             import logging
-            logging.getLogger(__name__).warning("S3 archival failed for tenant %s: %s", tenant_id, e)
+
+            logging.getLogger(__name__).warning(
+                "S3 archival failed for tenant %s: %s", tenant_id, e
+            )
 
         item_ids = [item.id for item in items]
         await self._session.execute(
-            update(MemoryItemORM)
-            .where(MemoryItemORM.id.in_(item_ids))
-            .values(compressed=True)
+            update(MemoryItemORM).where(MemoryItemORM.id.in_(item_ids)).values(compressed=True)
         )
         await self._session.flush()
         return len(items)
@@ -113,7 +116,10 @@ class Compressor:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "Summarize the following memories concisely, preserving key facts, decisions, and patterns.",
+                            "content": (
+                                "Summarize the following memories concisely,"
+                                " preserving key facts, decisions, and patterns."
+                            ),
                         },
                         {"role": "user", "content": content},
                     ],
@@ -123,4 +129,5 @@ class Compressor:
                 timeout=30.0,
             )
             resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+            data: dict[str, Any] = resp.json()
+            return str(data["choices"][0]["message"]["content"])

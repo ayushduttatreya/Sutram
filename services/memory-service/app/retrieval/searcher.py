@@ -8,14 +8,16 @@ ADR-007: During model migrations, multiple embedding_model values may coexist.
          Only same-model vectors are compared (AND embedding_model = :model).
          Results from all models are merged before reranking.
 """
+
 from __future__ import annotations
+
 import uuid
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.retrieval.embedder import Embedder
-from app.retrieval.reranker import CandidateRow, rerank
+from app.retrieval.reranker import CandidateRow, ScoredCandidate, rerank
 
 
 class Searcher:
@@ -36,7 +38,7 @@ class Searcher:
         top_k: int,
         session: AsyncSession,
         memory_types: list[str] | None = None,
-    ) -> list[CandidateRow]:
+    ) -> list[ScoredCandidate]:
         """Run ADR-008 compliant ANN search across all embedding models for this tenant."""
         # Discover distinct embedding models present for this tenant (ADR-007)
         models_result = await session.execute(
@@ -91,7 +93,7 @@ class Searcher:
             for row in rows:
                 all_candidates.append(
                     CandidateRow(
-                        id=row[0],          # already str from id::text cast
+                        id=row[0],  # already str from id::text cast
                         content=row[1],
                         metadata=row[2] or {},
                         embedding_model=row[3],

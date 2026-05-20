@@ -1,9 +1,9 @@
 # tests/unit/test_compressor.py
-import pytest
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from app.compression.compressor import Compressor
 from app.models.orm import MemoryItemORM
 
@@ -15,7 +15,7 @@ def make_mock_item(days_old: int = 10) -> MemoryItemORM:
     item.content = "test memory content"
     item.embedding_model = "text-embedding-3-small"
     item.extra_metadata = {}
-    item.created_at = datetime.now(timezone.utc) - timedelta(days=days_old)
+    item.created_at = datetime.now(UTC) - timedelta(days=days_old)
     item.retention_policy = "90d"
     return item
 
@@ -48,8 +48,10 @@ async def test_compress_tenant_marks_items_compressed():
     embedder = AsyncMock()
     embedder.embed = AsyncMock(return_value=[0.1] * 1536)
 
-    with patch.object(Compressor, "_summarize", return_value="test summary"), \
-         patch("app.compression.compressor.Archiver") as mock_archiver_cls:
+    with (
+        patch.object(Compressor, "_summarize", return_value="test summary"),
+        patch("app.compression.compressor.Archiver") as mock_archiver_cls,
+    ):
         mock_archiver = MagicMock()
         mock_archiver.archive_items = MagicMock()
         mock_archiver_cls.return_value = mock_archiver

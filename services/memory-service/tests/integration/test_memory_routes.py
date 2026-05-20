@@ -1,6 +1,7 @@
-import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 VALID_TENANT = str(uuid.uuid4())
@@ -18,7 +19,9 @@ def client():
         patch("app.dependencies.init_embedding"),
     ):
         from importlib import reload
+
         import app.main as m
+
         reload(m)
         return TestClient(m.app)
 

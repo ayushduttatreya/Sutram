@@ -1,10 +1,10 @@
 from __future__ import annotations
+
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from sutram_core.db.session import create_engine, create_session_factory
 from sutram_core.embedding.openai import OpenAIEmbedder
 from sutram_core.embedding.registry import EmbeddingRegistry
@@ -32,8 +32,8 @@ def init_db() -> None:
 def init_redis() -> None:
     global _redis_streams, _redis_cache
     settings = get_settings()
-    _redis_streams = aioredis.from_url(settings.redis_streams_url)
-    _redis_cache = aioredis.from_url(settings.redis_cache_url)
+    _redis_streams = aioredis.from_url(settings.redis_streams_url)  # type: ignore[no-untyped-call]
+    _redis_cache = aioredis.from_url(settings.redis_cache_url)  # type: ignore[no-untyped-call]
 
 
 def init_embedding() -> None:

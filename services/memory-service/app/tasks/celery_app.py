@@ -2,6 +2,7 @@
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import worker_process_init
+
 from app.settings import get_settings
 
 
@@ -34,9 +35,10 @@ def create_celery_app() -> Celery:
 celery_app = create_celery_app()
 
 
-@worker_process_init.connect
+@worker_process_init.connect  # type: ignore[untyped-decorator]
 def on_worker_process_init(**kwargs: object) -> None:
-    from app.dependencies import init_db, init_redis, init_embedding
+    from app.dependencies import init_db, init_embedding, init_redis
+
     init_db()
     init_redis()
     init_embedding()

@@ -24,4 +24,5 @@ def test_s3_endpoint_url_defaults_to_none():
 
 def test_inherits_from_core_settings():
     from sutram_core.settings import CoreSettings
+
     assert issubclass(MemoryServiceSettings, CoreSettings)

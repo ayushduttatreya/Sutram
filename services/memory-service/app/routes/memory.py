@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import hashlib
 import json
 import time
@@ -9,12 +10,15 @@ import redis.asyncio as aioredis
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sutram_core.events.memory import MemorySearchedEvent, MemoryWrittenEvent
+from sutram_core.middleware.internal_auth import InternalAuthError, verify_internal_token
+from sutram_core.middleware.tenant import set_tenant_context
 from sutram_core.streams.redis_streams import StreamProducer
 
 from app.dependencies import (
     get_db_session,
-    get_redis_cache,
     get_embedder,
+    get_redis_cache,
     get_searcher,
     get_stream_producer,
 )
@@ -22,7 +26,6 @@ from app.models.orm import MemoryItemORM
 from app.retrieval.embedder import Embedder
 from app.retrieval.searcher import Searcher
 from app.schemas.memory import (
-    MemoryBatchCreate,
     MemoryItemCreate,
     MemoryItemResponse,
     MemorySearchRequest,
@@ -30,9 +33,6 @@ from app.schemas.memory import (
     MemorySearchResult,
 )
 from app.settings import get_settings
-from sutram_core.events.memory import MemoryWrittenEvent, MemorySearchedEvent
-from sutram_core.middleware.internal_auth import verify_internal_token, InternalAuthError
-from sutram_core.middleware.tenant import set_tenant_context
 
 router = APIRouter(tags=["memory"])
 
@@ -44,8 +44,8 @@ SearcherDep = Annotated[Searcher, Depends(get_searcher)]
 
 
 async def _get_tenant_id(
-    x_internal_token: str = Header(..., alias="X-Internal-Token"),
-    x_tenant_id: uuid.UUID = Header(..., alias="X-Tenant-ID"),
+    x_internal_token: str = Header(..., alias="X-Internal-Token"),  # noqa: B008
+    x_tenant_id: uuid.UUID = Header(..., alias="X-Tenant-ID"),  # noqa: B008
 ) -> uuid.UUID:
     """Verify X-Internal-Token and extract tenant_id from header."""
     settings = get_settings()
@@ -77,6 +77,7 @@ async def _update_access_stats_bg(
 ) -> None:
     """Background task: update access stats with a fresh DB session."""
     from app.dependencies import get_db_session_context
+
     try:
         async with get_db_session_context() as fresh_session:
             await fresh_session.execute(
@@ -120,7 +121,9 @@ async def store_memory(
     await _invalidate_query_cache(redis, tenant_id)
     await producer.publish(
         "memory.events",
-        MemoryWrittenEvent(tenant_id=tenant_id, memory_item_id=item_id, memory_type=body.memory_type.value),
+        MemoryWrittenEvent(
+            tenant_id=tenant_id, memory_item_id=item_id, memory_type=body.memory_type.value
+        ),
     )
     return orm
 
@@ -133,7 +136,9 @@ async def get_memory_item(
 ) -> MemoryItemORM:
     await set_tenant_context(session, str(tenant_id))
     result = await session.execute(
-        select(MemoryItemORM).where(MemoryItemORM.id == item_id, MemoryItemORM.tenant_id == tenant_id)
+        select(MemoryItemORM).where(
+            MemoryItemORM.id == item_id, MemoryItemORM.tenant_id == tenant_id
+        )
     )
     item = result.scalar_one_or_none()
     if item is None:
@@ -150,7 +155,9 @@ async def forget_memory(
 ) -> None:
     await set_tenant_context(session, str(tenant_id))
     result = await session.execute(
-        select(MemoryItemORM).where(MemoryItemORM.id == item_id, MemoryItemORM.tenant_id == tenant_id)
+        select(MemoryItemORM).where(
+            MemoryItemORM.id == item_id, MemoryItemORM.tenant_id == tenant_id
+        )
     )
     item = result.scalar_one_or_none()
     if item is None:
@@ -174,7 +181,8 @@ async def search_memory(
     start_ms = int(time.time() * 1000)
 
     type_strs = sorted([t.value for t in body.memory_types]) if body.memory_types else ["all"]
-    cache_key = f"memory:query:{tenant_id}:{hashlib.sha256((body.query + '|' + ','.join(type_strs)).encode()).hexdigest()}"
+    _raw = (body.query + "|" + ",".join(type_strs)).encode()
+    cache_key = f"memory:query:{tenant_id}:{hashlib.sha256(_raw).hexdigest()}"
 
     cached = await redis.get(cache_key)
     if cached is not None:
@@ -195,8 +203,11 @@ async def search_memory(
     await set_tenant_context(session, str(tenant_id))
     memory_types = [t.value for t in body.memory_types] if body.memory_types else None
     candidates = await searcher.search(
-        query=body.query, tenant_id=tenant_id, top_k=body.top_k,
-        session=session, memory_types=memory_types,
+        query=body.query,
+        tenant_id=tenant_id,
+        top_k=body.top_k,
+        session=session,
+        memory_types=memory_types,
     )
 
     results: list[MemorySearchResult] = []
@@ -209,16 +220,19 @@ async def search_memory(
         for scored_cand in candidates:
             orm_row = rows_by_id.get(scored_cand.candidate.id)
             if orm_row:
-                results.append(MemorySearchResult(
-                    item=MemoryItemResponse.model_validate(orm_row),
-                    score=round(scored_cand.score, 4),
-                    similarity=scored_cand.candidate.similarity,
-                ))
+                results.append(
+                    MemorySearchResult(
+                        item=MemoryItemResponse.model_validate(orm_row),
+                        score=round(scored_cand.score, 4),
+                        similarity=scored_cand.candidate.similarity,
+                    )
+                )
         background_tasks.add_task(_update_access_stats_bg, candidate_ids, tenant_id)
 
     latency_ms = int(time.time() * 1000) - start_ms
     await redis.setex(
-        cache_key, settings.query_cache_ttl_seconds,
+        cache_key,
+        settings.query_cache_ttl_seconds,
         json.dumps([r.model_dump(mode="json") for r in results]),
     )
     await producer.publish(

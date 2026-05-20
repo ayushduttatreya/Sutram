@@ -1,9 +1,11 @@
 # services/memory-service/app/compression/archiver.py
 """S3 archival for compressed memory items."""
+
 from __future__ import annotations
+
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import boto3
@@ -25,16 +27,18 @@ class Archiver:
         self,
         tenant_id: uuid.UUID,
         summary_id: uuid.UUID,
-        items: list[dict],
+        items: list[dict[str, Any]],
     ) -> str:
         """Write compressed items to S3. Returns S3 key."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         key = f"{self._prefix}/{tenant_id}/{now.year}/{now.month:02d}/{summary_id}.json"
-        body = json.dumps({
-            "summary_id": str(summary_id),
-            "tenant_id": str(tenant_id),
-            "archived_at": now.isoformat(),
-            "items": items,
-        }).encode()
+        body = json.dumps(
+            {
+                "summary_id": str(summary_id),
+                "tenant_id": str(tenant_id),
+                "archived_at": now.isoformat(),
+                "items": items,
+            }
+        ).encode()
         self._s3.put_object(Bucket=self._bucket, Key=key, Body=body)
         return key

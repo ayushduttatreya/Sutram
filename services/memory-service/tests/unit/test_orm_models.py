@@ -1,6 +1,5 @@
-from sqlalchemy import inspect
-
 from app.models.orm import MemoryItemORM, MemorySummaryORM
+from sqlalchemy import inspect
 
 
 def test_tablenames():
@@ -10,12 +9,24 @@ def test_tablenames():
 
 def test_memory_item_has_required_columns():
     col_keys = {a.key for a in inspect(MemoryItemORM).mapper.column_attrs}  # Python attr names
-    col_names = {c.name for c in MemoryItemORM.__table__.columns}            # DB column names
+    col_names = {c.name for c in MemoryItemORM.__table__.columns}  # DB column names
 
     # Check Python attr names
-    required_keys = {"id", "tenant_id", "memory_type", "content", "embedding",
-                     "embedding_model", "extra_metadata", "accessed_at", "access_count",
-                     "retention_policy", "compressed", "created_at", "updated_at"}
+    required_keys = {
+        "id",
+        "tenant_id",
+        "memory_type",
+        "content",
+        "embedding",
+        "embedding_model",
+        "extra_metadata",
+        "accessed_at",
+        "access_count",
+        "retention_policy",
+        "compressed",
+        "created_at",
+        "updated_at",
+    }
     assert required_keys.issubset(col_keys)
 
     # Check DB column name (metadata is reserved in SA, mapped as extra_metadata Python attr)
@@ -25,10 +36,10 @@ def test_memory_item_has_required_columns():
 def test_metadata_python_attr_is_extra_metadata():
     """'metadata' is reserved by DeclarativeBase — mapped as extra_metadata Python attr."""
     col_keys = {a.key for a in inspect(MemoryItemORM).mapper.column_attrs}  # Python attr names
-    col_names = {c.name for c in MemoryItemORM.__table__.columns}            # DB column names
-    assert "extra_metadata" in col_keys   # Python attr name
-    assert "metadata" in col_names         # DB column name
-    assert "metadata" not in col_keys      # NOT accessible as .metadata (that's SA MetaData)
+    col_names = {c.name for c in MemoryItemORM.__table__.columns}  # DB column names
+    assert "extra_metadata" in col_keys  # Python attr name
+    assert "metadata" in col_names  # DB column name
+    assert "metadata" not in col_keys  # NOT accessible as .metadata (that's SA MetaData)
 
 
 def test_memory_item_has_check_constraint():
