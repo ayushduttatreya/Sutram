@@ -1,0 +1,35 @@
+# infra/docker-compose.dev.yml
+services:
+  workflow-service:
+    build:
+      context: ../services/workflow-service
+      target: dev
+    volumes:
+      - ../services/workflow-service:/app
+      - ../packages/core:/packages/core
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+
+  memory-service:
+    build:
+      context: ../services/memory-service
+      target: dev
+    volumes:
+      - ../services/memory-service:/app
+      - ../packages/core:/packages/core
+
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+      target: dev
+    volumes:
+      - ../services/api-gateway:/app
+      - ../packages/core:/packages/core
+
+  observability-service:
+    build:
+      context: ../services/observability-service
+      target: dev
+    volumes:
+      - ../services/observability-service:/app
+      - ../packages/core:/packages/core
