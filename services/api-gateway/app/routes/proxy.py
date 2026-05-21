@@ -12,19 +12,22 @@ Design decisions:
 - Authorization header stripped before forwarding
 - X-Internal-Token and X-Tenant-ID injected on every forwarded request
 """
+
 from __future__ import annotations
+
 import uuid
+from collections.abc import AsyncIterator
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
-
+from starlette.datastructures import QueryParams
 from sutram_core.middleware.idempotency import IdempotencyStore
 from sutram_core.middleware.rate_limit import RateLimiter, RateLimitExceeded
 
 from app.dependencies import get_http_client, get_idempotency_store, get_rate_limiter
 from app.middleware.auth import AuthDep
-from app.settings import get_settings
+from app.settings import APIGatewaySettings, get_settings
 
 router = APIRouter()
 
@@ -44,7 +47,7 @@ _HOP_BY_HOP = frozenset(
 )
 
 
-def _downstream_url(path: str, settings) -> str:
+def _downstream_url(path: str, settings: APIGatewaySettings) -> str:
     """Map /v1/... path to the correct downstream service base URL + path."""
     if path.startswith("/v1/memory"):
         return settings.memory_service_url + path
@@ -132,7 +135,9 @@ async def proxy(
     # 4. SSE streaming — separate code path, never buffer
     is_sse = full_path.endswith("/stream") and request.method == "GET"
     if is_sse:
-        return await _proxy_sse(get_http_client(), target_url, forward_headers, settings, request.query_params)
+        return await _proxy_sse(
+            get_http_client(), target_url, forward_headers, settings, request.query_params
+        )
 
     # 5. Normal buffered proxy
     return await _proxy_buffered(get_http_client(), request, target_url, forward_headers)
@@ -154,9 +159,7 @@ async def _proxy_buffered(
         params=request.query_params,
     )
     response = await client.send(upstream_request)
-    response_headers = {
-        k: v for k, v in response.headers.items() if k.lower() not in _HOP_BY_HOP
-    }
+    response_headers = {k: v for k, v in response.headers.items() if k.lower() not in _HOP_BY_HOP}
     return Response(
         content=response.content,
         status_code=response.status_code,
@@ -169,12 +172,12 @@ async def _proxy_sse(
     client: httpx.AsyncClient,
     target_url: str,
     forward_headers: dict[str, str],
-    settings,
-    query_params,
+    settings: APIGatewaySettings,
+    query_params: QueryParams,
 ) -> StreamingResponse:
     """Proxy an SSE stream. Checks upstream status before committing to 200 stream."""
 
-    async def event_stream():
+    async def event_stream() -> AsyncIterator[bytes]:
         sse_timeout = httpx.Timeout(settings.stream_timeout_seconds)
         async with client.stream(
             "GET",

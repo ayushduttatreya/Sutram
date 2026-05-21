@@ -1,5 +1,6 @@
 # services/api-gateway/app/main.py
 from __future__ import annotations
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 

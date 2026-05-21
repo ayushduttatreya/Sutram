@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 from functools import lru_cache
 
 from sutram_core.settings import CoreSettings
 
 
-class APIGatewaySettings(CoreSettings):
+class APIGatewaySettings(CoreSettings):  # type: ignore[misc]
     # Downstream service URLs
     workflow_service_url: str = "http://workflow-service:8001"
     memory_service_url: str = "http://memory-service:8002"

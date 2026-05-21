@@ -5,14 +5,15 @@ Extracts tenant_id from a Bearer JWT. Raises HTTPException on any auth failure.
 Does NOT use set_tenant_context — no DB session exists in the gateway.
 tenant_id is forwarded downstream as X-Tenant-ID header (handled in proxy.py).
 """
+
 from __future__ import annotations
+
 import uuid
 from typing import Annotated, Any, cast
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import ExpiredSignatureError, JWTError, jwt
-
 from sutram_core.middleware.auth import AuthError
 
 from app.settings import get_settings
@@ -43,7 +44,7 @@ def _decode_jwt(token: str, secret: str, algorithm: str) -> dict[str, Any]:
 
 
 async def get_tenant_id(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),  # noqa: B008
 ) -> uuid.UUID:
     """FastAPI dependency: verify JWT and return tenant_id as UUID.
 
@@ -54,9 +55,7 @@ async def get_tenant_id(
 
     settings = get_settings()
     try:
-        claims = _decode_jwt(
-            credentials.credentials, settings.jwt_secret, settings.jwt_algorithm
-        )
+        claims = _decode_jwt(credentials.credentials, settings.jwt_secret, settings.jwt_algorithm)
     except AuthError as e:
         detail = "token_expired" if e.expired else "invalid_token"
         raise HTTPException(status_code=401, detail=detail) from e

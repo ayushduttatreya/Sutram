@@ -5,11 +5,11 @@ All clients are created once at startup via lifespan() in main.py and
 closed on shutdown. The gateway has NO database — these are the only
 infrastructure connections it needs.
 """
+
 from __future__ import annotations
 
 import httpx
 import redis.asyncio as aioredis
-
 from sutram_core.middleware.idempotency import IdempotencyStore
 from sutram_core.middleware.rate_limit import RateLimiter
 
@@ -37,8 +37,8 @@ def init_clients() -> None:
         timeout=httpx.Timeout(settings.proxy_timeout_seconds),
     )
     # Use gateway's own named fields — never the inherited redis_url
-    _redis_rate_limit = aioredis.from_url(settings.redis_rate_limit_url)
-    _redis_idempotency = aioredis.from_url(settings.redis_idempotency_url)
+    _redis_rate_limit = aioredis.from_url(settings.redis_rate_limit_url)  # type: ignore[no-untyped-call]
+    _redis_idempotency = aioredis.from_url(settings.redis_idempotency_url)  # type: ignore[no-untyped-call]
     _rate_limiter = RateLimiter(
         redis=_redis_rate_limit,
         requests_per_minute=settings.requests_per_minute,
