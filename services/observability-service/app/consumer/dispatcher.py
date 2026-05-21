@@ -3,17 +3,18 @@
 All stream values are strings. We dispatch on event_type to the correct subclass.
 Pydantic v2 coerces string numbers ("500") to int/float where the field type requires it.
 """
+
 from __future__ import annotations
 
 from sutram_core.events.base import BaseEvent
 from sutram_core.events.execution import (
+    ExecutionCompletedEvent,
+    ExecutionPausedEvent,
     ExecutionStartedEvent,
     StepCompletedEvent,
     StepFailedEvent,
-    ExecutionCompletedEvent,
-    ExecutionPausedEvent,
 )
-from sutram_core.events.memory import MemoryWrittenEvent, MemorySearchedEvent
+from sutram_core.events.memory import MemorySearchedEvent, MemoryWrittenEvent
 
 _REGISTRY: dict[str, type[BaseEvent]] = {
     "execution.started": ExecutionStartedEvent,

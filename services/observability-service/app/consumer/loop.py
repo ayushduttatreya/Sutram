@@ -1,10 +1,10 @@
 # services/observability-service/app/consumer/loop.py
 from __future__ import annotations
+
 import asyncio
 import logging
 
 import redis.asyncio as aioredis
-
 from sutram_core.streams.redis_streams import StreamConsumerGroup
 
 from app.consumer.dispatcher import UnknownEventType, parse_event
@@ -86,6 +86,7 @@ async def _process_one(
     try:
         async with get_db_session_context() as session:
             from app.consumer.handler import EventHandler
+
             handler = EventHandler(sampler=sampler, session=session)
             await handler.handle(event, data)
         await consumer.ack(stream_name, settings.consumer_group, msg_id)
@@ -118,9 +119,12 @@ async def _reclaim_pending(
                 for k, v in fields.items()
             }
             await _process_one(
-                redis_streams, stream_name,
+                redis_streams,
+                stream_name,
                 msg_id.decode() if isinstance(msg_id, bytes) else msg_id,
-                decoded, consumer, sampler,
+                decoded,
+                consumer,
+                sampler,
             )
     except Exception as e:
         logger.warning("PEL reclaim failed for %s: %s", stream_name, e)

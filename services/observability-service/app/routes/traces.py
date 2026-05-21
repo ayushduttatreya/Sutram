@@ -1,13 +1,14 @@
 # services/observability-service/app/routes/traces.py
 from __future__ import annotations
+
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sutram_core.middleware.internal_auth import InternalAuthError, verify_internal_token
+
 from app.dependencies import get_db_session
 from app.models.orm import ExecutionTraceORM
 from app.settings import get_settings
@@ -17,8 +18,8 @@ DBSession = Annotated[AsyncSession, Depends(get_db_session)]
 
 
 async def _get_tenant(
-    x_internal_token: str = Header(..., alias="X-Internal-Token"),
-    x_tenant_id: uuid.UUID = Header(..., alias="X-Tenant-ID"),
+    x_internal_token: str = Header(..., alias="X-Internal-Token"),  # noqa: B008
+    x_tenant_id: uuid.UUID = Header(..., alias="X-Tenant-ID"),  # noqa: B008
 ) -> uuid.UUID:
     settings = get_settings()
     try:
@@ -36,7 +37,7 @@ async def get_traces(
     execution_id: uuid.UUID,
     session: DBSession,
     tenant_id: TenantDep,
-) -> dict:
+) -> dict[str, Any]:
     result = await session.execute(
         select(ExecutionTraceORM)
         .where(

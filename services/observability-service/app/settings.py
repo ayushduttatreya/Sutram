@@ -6,7 +6,7 @@ from functools import lru_cache
 from sutram_core.settings import CoreSettings
 
 
-class ObservabilityServiceSettings(CoreSettings):
+class ObservabilityServiceSettings(CoreSettings):  # type: ignore[misc]
     # Redis — consumer on DB 1 (streams), buffer on DB 0 (tail sampler)
     redis_streams_url: str = "redis://localhost:6379/1"
     redis_buffer_url: str = "redis://localhost:6379/0"
@@ -21,9 +21,9 @@ class ObservabilityServiceSettings(CoreSettings):
     memory_stream: str = "memory.events"
 
     # Tail sampler
-    trace_buffer_ttl_seconds: int = 600        # 10 minutes
+    trace_buffer_ttl_seconds: int = 600  # 10 minutes
     slow_execution_threshold_ms: int = 30_000  # 30 seconds → always keep
-    fast_execution_sample_rate: float = 0.10   # 10% of fast successes kept
+    fast_execution_sample_rate: float = 0.10  # 10% of fast successes kept
 
     # Consumer loop
     consumer_poll_count: int = 100

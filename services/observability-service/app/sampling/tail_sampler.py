@@ -9,6 +9,7 @@ Decision on ExecutionCompletedEvent:
 - total_duration_ms > slow_threshold_ms → keep 100%
 - Otherwise → keep at sample_rate probability (default 10%)
 """
+
 from __future__ import annotations
 
 import json
@@ -46,7 +47,7 @@ class TailSampler:
     ) -> None:
         """Store span in Hash buffer. Same span_key overwrites (idempotent on redelivery)."""
         key = self._buffer_key(execution_id)
-        await self._redis.hset(key, span_key, json.dumps(span_data))
+        await self._redis.hset(key, span_key, json.dumps(span_data))  # type: ignore[misc]
         await self._redis.expire(key, self._ttl)
 
     async def mark_has_failure(self, execution_id: uuid.UUID) -> None:
@@ -66,7 +67,7 @@ class TailSampler:
     async def flush(self, execution_id: uuid.UUID) -> list[dict[str, Any]]:
         """Read all buffered spans, delete buffer + failure flag, return spans."""
         key = self._buffer_key(execution_id)
-        raw = await self._redis.hgetall(key)
+        raw = await self._redis.hgetall(key)  # type: ignore[misc]
         spans = [json.loads(v) for v in raw.values()]
         await self._redis.delete(key, self._failure_key(execution_id))
         return spans

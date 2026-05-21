@@ -1,26 +1,26 @@
 # services/observability-service/app/consumer/handler.py
 """Routes parsed events to the correct sinks: tail sampler, Prometheus, DB writes."""
+
 from __future__ import annotations
+
 import uuid
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sutram_core.events.base import BaseEvent
 from sutram_core.events.execution import (
+    ExecutionCompletedEvent,
+    ExecutionPausedEvent,
     ExecutionStartedEvent,
     StepCompletedEvent,
     StepFailedEvent,
-    ExecutionCompletedEvent,
-    ExecutionPausedEvent,
 )
-from sutram_core.events.memory import MemoryWrittenEvent, MemorySearchedEvent
+from sutram_core.events.memory import MemorySearchedEvent, MemoryWrittenEvent
 
 from app.metrics.prometheus import (
     record_execution_completed,
     record_execution_started,
-    record_step_completed,
     record_memory_searched,
+    record_step_completed,
 )
 from app.models.orm import AuditLogORM, ExecutionTraceORM
 from app.sampling.tail_sampler import TailSampler
@@ -59,9 +59,7 @@ class EventHandler:
             resource_id=event.execution_id,
         )
 
-    async def _on_step_completed(
-        self, event: StepCompletedEvent, raw_data: dict[str, str]
-    ) -> None:
+    async def _on_step_completed(self, event: StepCompletedEvent, raw_data: dict[str, str]) -> None:
         span_key = f"step:{event.step_index}"
         await self._sampler.buffer_span(event.execution_id, span_key, raw_data)
         record_step_completed(
@@ -70,9 +68,7 @@ class EventHandler:
             duration_ms=event.duration_ms,
         )
 
-    async def _on_step_failed(
-        self, event: StepFailedEvent, raw_data: dict[str, str]
-    ) -> None:
+    async def _on_step_failed(self, event: StepFailedEvent, raw_data: dict[str, str]) -> None:
         span_key = f"step_failed:{event.step_index}"
         await self._sampler.buffer_span(event.execution_id, span_key, raw_data)
         await self._sampler.mark_has_failure(event.execution_id)

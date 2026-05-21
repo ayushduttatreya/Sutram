@@ -1,13 +1,14 @@
 # services/observability-service/app/routes/audit.py
 from __future__ import annotations
+
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sutram_core.middleware.internal_auth import InternalAuthError, verify_internal_token
+
 from app.dependencies import get_db_session
 from app.models.orm import AuditLogORM
 from app.settings import get_settings
@@ -17,8 +18,8 @@ DBSession = Annotated[AsyncSession, Depends(get_db_session)]
 
 
 async def _get_tenant(
-    x_internal_token: str = Header(..., alias="X-Internal-Token"),
-    x_tenant_id: uuid.UUID = Header(..., alias="X-Tenant-ID"),
+    x_internal_token: str = Header(..., alias="X-Internal-Token"),  # noqa: B008
+    x_tenant_id: uuid.UUID = Header(..., alias="X-Tenant-ID"),  # noqa: B008
 ) -> uuid.UUID:
     settings = get_settings()
     try:
@@ -38,7 +39,7 @@ async def get_audit_logs(
     limit: int = Query(default=100, le=1000),
     offset: int = Query(default=0, ge=0),
     action: str | None = Query(default=None),
-) -> dict:
+) -> dict[str, Any]:
     settings = get_settings()
     effective_limit = min(limit, settings.audit_log_max_page_size)
     query = select(AuditLogORM).where(AuditLogORM.tenant_id == tenant_id)

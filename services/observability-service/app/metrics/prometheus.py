@@ -4,6 +4,7 @@ Metrics are module-level singletons — safe to import from anywhere.
 The /metrics HTTP endpoint is served by prometheus_client.make_asgi_app()
 mounted at app startup in main.py, separate from the /v1/ business routes.
 """
+
 from __future__ import annotations
 
 from prometheus_client import Counter, Gauge, Histogram
@@ -56,6 +57,7 @@ CHECKPOINT_FAILURES = Counter(
 
 
 # ── Recording helpers ──────────────────────────────────────────────────
+
 
 def record_execution_started(tenant_id: str) -> None:
     """Increment active execution gauge when an execution begins."""

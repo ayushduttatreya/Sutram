@@ -1,6 +1,8 @@
 # services/observability-service/app/main.py
 from __future__ import annotations
+
 import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -22,10 +24,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     consumer_task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await consumer_task
-    except asyncio.CancelledError:
-        pass
     await close_redis()
 
 

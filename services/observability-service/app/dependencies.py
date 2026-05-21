@@ -1,11 +1,11 @@
 # services/observability-service/app/dependencies.py
 from __future__ import annotations
+
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from sutram_core.db.session import create_engine, create_session_factory
 from sutram_core.streams.redis_streams import StreamConsumerGroup
 
@@ -26,8 +26,8 @@ def init_db() -> None:
 def init_redis() -> None:
     global _redis_streams, _redis_buffer
     settings = get_settings()
-    _redis_streams = aioredis.from_url(settings.redis_streams_url)
-    _redis_buffer = aioredis.from_url(settings.redis_buffer_url)
+    _redis_streams = aioredis.from_url(settings.redis_streams_url)  # type: ignore[no-untyped-call]
+    _redis_buffer = aioredis.from_url(settings.redis_buffer_url)  # type: ignore[no-untyped-call]
 
 
 async def close_redis() -> None:
