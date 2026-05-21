@@ -1,17 +1,19 @@
 """Integration tests for the reverse proxy using respx to mock downstream services."""
-import uuid
+
 import time
-import pytest
-import respx
-import httpx
-from jose import jwt
+import uuid
 from unittest.mock import patch
-from fastapi.testclient import TestClient
+
+import app.dependencies as deps
 import fakeredis
 import fakeredis.aioredis
-import app.dependencies as deps
-from sutram_core.middleware.rate_limit import RateLimiter
+import httpx
+import pytest
+import respx
+from fastapi.testclient import TestClient
+from jose import jwt
 from sutram_core.middleware.idempotency import IdempotencyStore
+from sutram_core.middleware.rate_limit import RateLimiter
 
 
 def make_jwt(tenant_id: str, secret: str = "gw-test-secret") -> str:
@@ -34,6 +36,7 @@ def gw_client():
     idem_redis = fakeredis.aioredis.FakeRedis(server=server)
 
     from importlib import reload
+
     import app.main as m
 
     with patch("app.middleware.auth.get_settings") as mock_auth_settings:
@@ -121,7 +124,9 @@ def test_proxy_memory_search_routes_to_memory_service(gw_client):
     tenant_id = str(uuid.uuid4())
     with respx.mock:
         respx.post("http://memory-service:8002/v1/memory/search").mock(
-            return_value=httpx.Response(200, json={"results": [], "cache_hit": False, "latency_ms": 5})
+            return_value=httpx.Response(
+                200, json={"results": [], "cache_hit": False, "latency_ms": 5}
+            )
         )
         resp = gw_client.post(
             "/v1/memory/search",
@@ -137,7 +142,9 @@ def test_missing_auth_returns_401(gw_client):
 
 
 def test_rate_limit_exceeded_returns_429(gw_client):
-    import fakeredis, fakeredis.aioredis
+    import fakeredis
+    import fakeredis.aioredis
+
     server = fakeredis.FakeServer()
     tight_redis = fakeredis.aioredis.FakeRedis(server=server)
     original = deps._rate_limiter
