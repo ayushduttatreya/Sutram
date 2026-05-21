@@ -28,6 +28,7 @@ def test_stream_timeout_defaults_to_none():
 
 def test_inherits_from_core_settings():
     from sutram_core.settings import CoreSettings
+
     assert issubclass(APIGatewaySettings, CoreSettings)
 
 

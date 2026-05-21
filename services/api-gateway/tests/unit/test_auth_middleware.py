@@ -1,12 +1,13 @@
 # tests/unit/test_auth_middleware.py
-import uuid
 import time
-import pytest
-from jose import jwt
+import uuid
 from unittest.mock import patch
+
+import pytest
+from app.middleware.auth import AuthDep
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.middleware.auth import get_tenant_id, AuthDep
+from jose import jwt
 
 
 def make_jwt(tenant_id: str, secret: str = "test-secret", expired: bool = False) -> str:
@@ -86,6 +87,7 @@ def test_token_missing_tenant_id_returns_401(test_app):
 def test_malformed_tenant_id_uuid_returns_401(test_app):
     """A valid JWT with a non-UUID tenant_id should return 401."""
     import time as _time
+
     token = jwt.encode(
         {"tenant_id": "not-a-uuid", "sub": "user", "exp": int(_time.time()) + 3600},
         "test-secret",

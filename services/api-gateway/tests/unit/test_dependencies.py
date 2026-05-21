@@ -1,6 +1,6 @@
 # tests/unit/test_dependencies.py
-import pytest
 import app.dependencies as deps
+import pytest
 
 
 def test_get_http_client_raises_before_init():
@@ -34,8 +34,10 @@ def test_get_idempotency_store_raises_before_init():
 
 
 def test_init_clients_creates_http_client():
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
+
     import httpx
+
     # Patch aioredis.from_url so no real Redis connection is attempted
     with patch("app.dependencies.aioredis") as mock_aioredis:
         mock_aioredis.from_url.return_value = MagicMock()
@@ -53,8 +55,7 @@ def test_init_clients_creates_http_client():
 
 @pytest.mark.asyncio
 async def test_close_clients_nulls_all_singletons():
-    from unittest.mock import patch, AsyncMock, MagicMock
-    import httpx
+    from unittest.mock import AsyncMock, patch
 
     with patch("app.dependencies.aioredis") as mock_aioredis:
         mock_aioredis.from_url.return_value = AsyncMock()
