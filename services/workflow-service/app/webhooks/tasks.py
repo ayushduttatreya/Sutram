@@ -26,10 +26,13 @@ def deliver_webhook(self: Task, delivery_id: str) -> None:
     """Attempt delivery of a webhook. Retries with exponential-ish backoff."""
     import asyncio
 
-    asyncio.run(_deliver(delivery_id, attempt=self.request.retries))
+    retry_delay = asyncio.run(_deliver(delivery_id, attempt=self.request.retries))
+    if retry_delay is not None:
+        raise self.retry(countdown=retry_delay)
 
 
-async def _deliver(delivery_id: str, attempt: int) -> None:
+async def _deliver(delivery_id: str, attempt: int) -> int | None:
+    """Returns retry countdown seconds if a retry is needed, None otherwise."""
     import httpx
     from sqlalchemy import select
 
@@ -47,7 +50,7 @@ async def _deliver(delivery_id: str, attempt: int) -> None:
         )
         delivery = result.scalar_one_or_none()
         if delivery is None or delivery.status in ("delivered", "dead_lettered"):
-            return
+            return None
 
         sub_result = await session.execute(
             select(WebhookSubscriptionORM).where(
@@ -57,7 +60,7 @@ async def _deliver(delivery_id: str, attempt: int) -> None:
         subscription = sub_result.scalar_one_or_none()
         if subscription is None or not subscription.active:
             delivery.status = "failed"
-            return
+            return None
 
         secret = decrypt_secret(
             subscription.secret_encrypted, settings.webhook_secret_encryption_key
@@ -78,12 +81,15 @@ async def _deliver(delivery_id: str, attempt: int) -> None:
         delivery.attempt_count += 1
         delivery.last_attempt_at = datetime.now(UTC)
         delivery.response_code = status_code
-        delivery.response_body = response_body[:1000]  # truncate to column limit
+        delivery.response_body = response_body[:1000]
 
         if 200 <= status_code < 300:
             delivery.status = "delivered"
+            return None
         elif attempt >= len(RETRY_DELAYS) - 1:
             delivery.status = "dead_lettered"
+            return None
         else:
             delivery.status = "pending"
             delivery.next_retry_at = datetime.now(UTC) + timedelta(seconds=RETRY_DELAYS[attempt])
+            return RETRY_DELAYS[attempt]
