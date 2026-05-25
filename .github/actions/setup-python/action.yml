@@ -1,0 +1,14 @@
+name: Setup Python with uv
+description: Checkout, install uv, sync workspace
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - run: uv sync --frozen
+      shell: bash
