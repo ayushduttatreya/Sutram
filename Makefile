@@ -26,7 +26,7 @@ dev-down:
 
 test:
 	$(COMPOSE_TEST) up -d
-	uv run pytest packages/ -v --tb=short
+	uv run pytest packages/ services/ -v --tb=short
 	$(COMPOSE_TEST) down -v
 
 lint:

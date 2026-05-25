@@ -78,6 +78,47 @@ services:
       - "4317:4317"
       - "4318:4318"
 
+  workflow-worker:
+    build:
+      context: ../services/workflow-service
+      dockerfile: Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutram:sutram@pgbouncer:5432/sutram
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/3
+      CELERY_RESULT_BACKEND: redis://redis:6379/4
+      REDIS_STREAMS_URL: redis://redis:6379/1
+      REDIS_LOCKS_URL: redis://redis:6379/2
+      REDIS_CACHE_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+    restart: on-failure
+
+  memory-worker:
+    build:
+      context: ../services/memory-service
+      dockerfile: Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutram:sutram@pgbouncer:5432/sutram
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/3
+      CELERY_RESULT_BACKEND: redis://redis:6379/4
+      REDIS_STREAMS_URL: redis://redis:6379/1
+      REDIS_CACHE_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+    restart: on-failure
+
 volumes:
   postgres_data:
   redis_data:

@@ -22,6 +22,7 @@ def create_celery_app() -> Celery:
         enable_utc=True,
         task_acks_late=True,
         worker_prefetch_multiplier=1,
+        result_expires=3600,
         beat_schedule={
             "compress-old-memories": {
                 "task": "memory.compress",
