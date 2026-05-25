@@ -14,6 +14,7 @@ from app.dependencies import get_db_session, get_tenant_id_from_header
 from app.models.orm import WebhookSubscriptionORM
 from app.settings import get_settings
 from app.webhooks.crypto import encrypt_secret, generate_webhook_secret
+from app.webhooks.url_validator import WebhookURLError, validate_webhook_url
 
 router = APIRouter(tags=["webhooks"])
 
@@ -51,6 +52,10 @@ async def create_webhook(
     session: DBSession,
     tenant_id: TenantID,
 ) -> dict[str, object]:
+    try:
+        validate_webhook_url(body.url)
+    except WebhookURLError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     await set_tenant_context(session, str(tenant_id))
     settings = get_settings()
     raw_secret = generate_webhook_secret()
