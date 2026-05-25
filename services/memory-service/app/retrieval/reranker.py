@@ -22,6 +22,7 @@ class CandidateRow:
     accessed_at: datetime
     access_count: int
     similarity: float
+    memory_type: str = "episodic"  # default for backwards compat (summaries use episodic decay)
 
 
 class ScoredCandidate(NamedTuple):
@@ -39,15 +40,23 @@ def recency_score(accessed_at: datetime, half_life_days: float = 30.0) -> float:
     return math.exp(-age_days * math.log(2) / half_life_days)
 
 
+_TYPE_HALF_LIFE: dict[str, float] = {
+    "episodic": 30.0,    # decay over time — these are event-specific
+    "semantic": float("inf"),   # never decay — stable facts
+    "procedural": float("inf"), # never decay — stable instructions
+}
+
+
 def rerank(
     candidates: list[CandidateRow],
     top_k: int,
-    half_life_days: float = 30.0,
+    half_life_days: float = 30.0,  # kept for backwards compat, used as episodic default
 ) -> list[ScoredCandidate]:
     """Score and sort candidates by composite score. Return top_k as ScoredCandidate list."""
     scored: list[ScoredCandidate] = []
     for c in candidates:
-        rec = recency_score(c.accessed_at, half_life_days)
+        effective_half_life = _TYPE_HALF_LIFE.get(c.memory_type, half_life_days)
+        rec = recency_score(c.accessed_at, effective_half_life)
         freq = min(math.log(c.access_count + 1), _FREQ_CAP)
         score = c.similarity * 0.6 + rec * 0.3 + freq * 0.1
         scored.append(ScoredCandidate(score=score, candidate=c))
