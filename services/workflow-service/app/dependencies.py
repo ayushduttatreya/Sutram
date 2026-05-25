@@ -1,13 +1,16 @@
 # app/dependencies.py
 from __future__ import annotations
 
+import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
+from fastapi import Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sutram_core.db.session import create_engine, create_session_factory
 from sutram_core.locking.redis_lock import RedisLock
+from sutram_core.middleware.internal_auth import InternalAuthError, verify_internal_token
 from sutram_core.middleware.tenant import set_tenant_context
 from sutram_core.streams.redis_streams import StreamProducer
 
@@ -55,6 +58,13 @@ def get_stream_producers() -> tuple[StreamProducer, StreamProducer]:
     return StreamProducer(redis=_redis_streams), StreamProducer(redis=_redis_streams)
 
 
+def get_redis_streams_for_sse() -> aioredis.Redis:
+    """Returns the streams Redis client for SSE subscriptions."""
+    if _redis_streams is None:
+        raise RuntimeError("Redis not initialized — call init_redis() at startup")
+    return _redis_streams
+
+
 @asynccontextmanager
 async def get_db_session_context() -> AsyncIterator[AsyncSession]:
     """Async context manager for non-FastAPI use (Celery tasks, recovery handler)."""
@@ -82,3 +92,19 @@ async def get_tenant_session(
     async for session in get_db_session():
         await set_tenant_context(session, tenant_id)
         yield session
+
+
+async def get_tenant_id_from_header(
+    x_internal_token: str = Header(..., alias="X-Internal-Token"),  # noqa: B008
+    x_tenant_id: uuid.UUID = Header(..., alias="X-Tenant-ID"),  # noqa: B008
+) -> uuid.UUID:
+    """Verify X-Internal-Token and extract tenant_id from X-Tenant-ID header.
+
+    Mirrors the pattern in memory-service/app/routes/memory.py._get_tenant_id.
+    """
+    settings = get_settings()
+    try:
+        verify_internal_token(x_internal_token, settings.internal_auth_token)
+    except InternalAuthError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    return x_tenant_id
