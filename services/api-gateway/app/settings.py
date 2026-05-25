@@ -11,11 +11,11 @@ class APIGatewaySettings(CoreSettings):  # type: ignore[misc]
     memory_service_url: str = "http://memory-service:8002"
     observability_service_url: str = "http://observability-service:8003"
 
-    # Redis for rate limiting — DB 3 per infra/redis.conf spec
-    redis_rate_limit_url: str = "redis://localhost:6379/3"
+    # Redis for rate limiting — DB 5 per infra/redis.conf spec
+    redis_rate_limit_url: str = "redis://localhost:6379/5"
 
-    # Redis for idempotency dedup — DB 0 (general cache)
-    redis_idempotency_url: str = "redis://localhost:6379/0"
+    # Redis for idempotency dedup — DB 6 (own DB to avoid cache eviction)
+    redis_idempotency_url: str = "redis://localhost:6379/6"
 
     # Per-tenant rate limit
     requests_per_minute: int = 1000
