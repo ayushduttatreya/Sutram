@@ -75,7 +75,8 @@ def upgrade() -> None:
     )
     op.execute(
         "CREATE INDEX idx_memory_items_embedding ON memory_items "
-        "USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+        "USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64) "
+        "WHERE compressed = false"
     )
 
     # ── memory_summaries ──────────────────────────────────────────────
@@ -113,7 +114,7 @@ def upgrade() -> None:
     op.create_index("idx_memory_summaries_tenant_id", "memory_summaries", ["tenant_id"])
     op.execute(
         "CREATE INDEX idx_memory_summaries_embedding ON memory_summaries "
-        "USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+        "USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)"
     )
 
     # ── Row-level security ────────────────────────────────────────────
