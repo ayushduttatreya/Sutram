@@ -41,15 +41,20 @@ async def test_search_calls_embedder_once_per_distinct_model():
     """For each distinct embedding_model in the DB, embed the query once."""
     session = AsyncMock()
 
-    # First execute: 2 distinct models
+    # First execute: 2 distinct models (memory_items)
     model_result = MagicMock()
     model_result.__iter__ = MagicMock(
         return_value=iter([("text-embedding-3-small",), ("text-embedding-ada-002",)])
     )
-    # Subsequent executes: empty candidates for each ANN query
+    # ANN queries: empty candidates for each model
     empty_result = MagicMock()
     empty_result.__iter__ = MagicMock(return_value=iter([]))
-    session.execute = AsyncMock(side_effect=[model_result, empty_result, empty_result])
+    # memory_summaries distinct models query: also empty
+    empty_summary_models = MagicMock()
+    empty_summary_models.__iter__ = MagicMock(return_value=iter([]))
+    session.execute = AsyncMock(
+        side_effect=[model_result, empty_result, empty_result, empty_summary_models]
+    )
 
     embedder = MagicMock(spec=Embedder)
     embedder.embed = AsyncMock(return_value=[0.1] * 1536)
@@ -63,7 +68,7 @@ async def test_search_calls_embedder_once_per_distinct_model():
         memory_types=["semantic"],
     )
 
-    # embed called twice — once per model
+    # embed called twice — once per model (from memory_items only; no summary models)
     assert embedder.embed.call_count == 2
     # Verify embed was called with the correct model names
     call_models = [
@@ -81,7 +86,9 @@ async def test_search_passes_memory_types_filter():
     model_result.__iter__ = MagicMock(return_value=iter([("text-embedding-3-small",)]))
     empty_result = MagicMock()
     empty_result.__iter__ = MagicMock(return_value=iter([]))
-    session.execute = AsyncMock(side_effect=[model_result, empty_result])
+    empty_summary_models = MagicMock()
+    empty_summary_models.__iter__ = MagicMock(return_value=iter([]))
+    session.execute = AsyncMock(side_effect=[model_result, empty_result, empty_summary_models])
 
     searcher = Searcher(embedder=make_mock_embedder(), candidate_limit=50, half_life_days=30.0)
     await searcher.search(
@@ -107,7 +114,9 @@ async def test_search_defaults_to_all_memory_types_when_none():
     model_result.__iter__ = MagicMock(return_value=iter([("text-embedding-3-small",)]))
     empty_result = MagicMock()
     empty_result.__iter__ = MagicMock(return_value=iter([]))
-    session.execute = AsyncMock(side_effect=[model_result, empty_result])
+    empty_summary_models = MagicMock()
+    empty_summary_models.__iter__ = MagicMock(return_value=iter([]))
+    session.execute = AsyncMock(side_effect=[model_result, empty_result, empty_summary_models])
 
     searcher = Searcher(embedder=make_mock_embedder(), candidate_limit=50, half_life_days=30.0)
     await searcher.search(

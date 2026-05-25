@@ -39,8 +39,8 @@ class Searcher:
         session: AsyncSession,
         memory_types: list[str] | None = None,
     ) -> list[ScoredCandidate]:
-        """Run ADR-008 compliant ANN search across all embedding models for this tenant."""
-        # Discover distinct embedding models present for this tenant (ADR-007)
+        """Run ADR-008 compliant ANN search across memory_items and memory_summaries."""
+        # ── memory_items (active, uncompressed) ──────────────────────────────────
         models_result = await session.execute(
             text(
                 "SELECT DISTINCT embedding_model FROM memory_items "
@@ -49,19 +49,14 @@ class Searcher:
             {"tid": tenant_id},
         )
         models = [row[0] for row in models_result]
-        if not models:
-            return []
 
         type_filter = memory_types or ["episodic", "semantic", "procedural"]
         all_candidates: list[CandidateRow] = []
 
         for model_name in models:
-            # Embed query using the same model as the candidate rows (ADR-007)
             vector = await self._embedder.embed(query, model=model_name)
             vec_str = "[" + ",".join(str(v) for v in vector) + "]"
 
-            # ADR-008: WHERE tenant_id = :tid BEFORE ORDER BY embedding <=> :vec
-            # ADR-007: AND embedding_model = :model — only same-model comparisons
             rows = await session.execute(
                 text("""
                     WITH q AS (SELECT :vec::vector AS qvec)
@@ -72,7 +67,8 @@ class Searcher:
                         embedding_model,
                         accessed_at,
                         access_count,
-                        1 - (embedding <=> q.qvec) AS similarity
+                        1 - (embedding <=> q.qvec) AS similarity,
+                        memory_type
                     FROM memory_items, q
                     WHERE tenant_id = :tid
                       AND compressed = false
@@ -93,14 +89,72 @@ class Searcher:
             for row in rows:
                 all_candidates.append(
                     CandidateRow(
-                        id=row[0],  # already str from id::text cast
+                        id=row[0],
                         content=row[1],
                         metadata=row[2] or {},
                         embedding_model=row[3],
                         accessed_at=row[4],
                         access_count=row[5],
                         similarity=float(row[6]),
+                        memory_type=row[7],
                     )
                 )
+
+        # ── memory_summaries (compressed/archived memories) ───────────────────────
+        summary_models_result = await session.execute(
+            text(
+                "SELECT DISTINCT embedding_model FROM memory_summaries "
+                "WHERE tenant_id = :tid"
+            ),
+            {"tid": tenant_id},
+        )
+        summary_models = [row[0] for row in summary_models_result]
+
+        for model_name in summary_models:
+            # Re-use cached vector if same model was already embedded above
+            vector = await self._embedder.embed(query, model=model_name)
+            vec_str = "[" + ",".join(str(v) for v in vector) + "]"
+
+            rows = await session.execute(
+                text("""
+                    WITH q AS (SELECT :vec::vector AS qvec)
+                    SELECT
+                        id::text,
+                        summary AS content,
+                        '{}'::jsonb AS metadata,
+                        embedding_model,
+                        created_at AS accessed_at,
+                        0 AS access_count,
+                        1 - (embedding <=> q.qvec) AS similarity
+                    FROM memory_summaries, q
+                    WHERE tenant_id = :tid
+                      AND embedding_model = :model
+                    ORDER BY embedding <=> q.qvec
+                    LIMIT :lim
+                """),
+                {
+                    "vec": vec_str,
+                    "tid": tenant_id,
+                    "model": model_name,
+                    "lim": self._candidate_limit // 2,  # fewer summary candidates
+                },
+            )
+
+            for row in rows:
+                all_candidates.append(
+                    CandidateRow(
+                        id=row[0],
+                        content=row[1],
+                        metadata=row[2] or {},
+                        embedding_model=row[3],
+                        accessed_at=row[4],
+                        access_count=row[5],
+                        similarity=float(row[6]),
+                        memory_type="episodic",  # summaries use episodic decay
+                    )
+                )
+
+        if not all_candidates:
+            return []
 
         return rerank(all_candidates, top_k=top_k, half_life_days=self._half_life_days)
