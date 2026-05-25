@@ -24,3 +24,8 @@ class IdempotencyStore:
         stored = await self._redis.set(redis_key, "1", nx=True, ex=ttl_seconds)
         # SET NX returns truthy (True) if key was newly set, falsy (None/False) if already existed
         return not stored
+
+    async def delete(self, key: str) -> None:
+        """Delete the idempotency key so the client can retry after a failure."""
+        redis_key = f"idempotency:{key}"
+        await self._redis.delete(redis_key)

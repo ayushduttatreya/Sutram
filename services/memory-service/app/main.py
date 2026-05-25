@@ -34,6 +34,28 @@ def create_app() -> FastAPI:
     )
     @app.get("/health", include_in_schema=False)
     async def health() -> JSONResponse:
+        from sqlalchemy import text
+
+        from app.dependencies import _redis_streams, get_db_session_context
+
+        errors: dict[str, str] = {}
+
+        if _redis_streams is None:
+            errors["redis"] = "unreachable"
+        else:
+            try:
+                await _redis_streams.ping()
+            except Exception:
+                errors["redis"] = "unreachable"
+
+        try:
+            async with get_db_session_context() as session:
+                await session.execute(text("SELECT 1"))
+        except Exception:
+            errors["db"] = "unreachable"
+
+        if errors:
+            return JSONResponse({"status": "degraded", **errors}, status_code=503)
         return JSONResponse({"status": "ok"})
 
     app.include_router(memory.router, prefix="/v1")

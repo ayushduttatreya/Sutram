@@ -80,6 +80,7 @@ class WorkflowExecutionORM(Base, TimestampMixin):  # type: ignore[misc]
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     pause_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    definition_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     tenant: Mapped[TenantORM] = relationship(back_populates="executions")
     workflow: Mapped[WorkflowORM] = relationship(back_populates="executions")

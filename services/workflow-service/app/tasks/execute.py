@@ -65,12 +65,16 @@ async def _run(execution_id: str) -> None:
             stream_producer_sse=sse_producer,
         )
 
-        wf_result = await session.execute(
-            select(WorkflowORM).where(WorkflowORM.id == execution.workflow_id)
-        )
-        workflow_orm = wf_result.scalar_one_or_none()
-        if workflow_orm is None:
-            return  # workflow deleted
+        if execution.definition_snapshot:
+            definition = WorkflowDefinition.model_validate(execution.definition_snapshot)
+        else:
+            # fallback: fetch live definition (backwards compat for old executions)
+            wf_result = await session.execute(
+                select(WorkflowORM).where(WorkflowORM.id == execution.workflow_id)
+            )
+            workflow_orm = wf_result.scalar_one_or_none()
+            if workflow_orm is None:
+                return  # workflow deleted
+            definition = WorkflowDefinition.model_validate(workflow_orm.definition)
 
-        definition = WorkflowDefinition.model_validate(workflow_orm.definition)
         await executor.run(execution, definition)

@@ -125,8 +125,10 @@ async def proxy(
     full_path = f"/v1/{path}"
     is_execute_endpoint = full_path.rstrip("/").endswith("/execute")
     is_memory_items_post = full_path.rstrip("/") == "/v1/memory/items"
-    if request.method == "POST" and (is_execute_endpoint or is_memory_items_post):
-        await _check_idempotency(tenant_id, idempotency_key, get_idempotency_store())
+    store = get_idempotency_store()
+    idempotency_applies = request.method == "POST" and (is_execute_endpoint or is_memory_items_post)
+    if idempotency_applies:
+        await _check_idempotency(tenant_id, idempotency_key, store)
 
     # 3. Build target URL and forward headers
     target_url = _downstream_url(full_path, settings)
@@ -140,7 +142,14 @@ async def proxy(
         )
 
     # 5. Normal buffered proxy
-    return await _proxy_buffered(get_http_client(), request, target_url, forward_headers)
+    response = await _proxy_buffered(get_http_client(), request, target_url, forward_headers)
+
+    # 6. On 5xx, delete the idempotency key so the client can retry
+    if idempotency_applies and idempotency_key is not None and response.status_code >= 500:
+        scoped_key = f"{tenant_id}:{idempotency_key}"
+        await store.delete(scoped_key)
+
+    return response
 
 
 async def _proxy_buffered(

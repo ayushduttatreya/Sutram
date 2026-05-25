@@ -36,7 +36,8 @@ async def execute(
     await set_tenant_context(session, str(tenant_id))
     # Verify workflow exists
     wf_result = await session.execute(select(WorkflowORM).where(WorkflowORM.id == workflow_id))
-    if wf_result.scalar_one_or_none() is None:
+    workflow_orm = wf_result.scalar_one_or_none()
+    if workflow_orm is None:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
     exec_id = uuid.uuid4()
@@ -52,6 +53,7 @@ async def execute(
         workflow_id=workflow_id,
         status=ExecutionStatus.PENDING.value,
         context=context.model_dump(mode="json"),
+        definition_snapshot=workflow_orm.definition,
     )
     session.add(execution)
     await session.flush()
