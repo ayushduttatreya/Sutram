@@ -1,6 +1,6 @@
-import pytest
 import fakeredis
 import fakeredis.aioredis
+import pytest
 
 
 @pytest.fixture
@@ -15,9 +15,11 @@ async def fake_redis():
 def clear_settings_cache():
     yield
     from app.settings import get_settings
+
     get_settings.cache_clear()
     try:
         from sutram_core.settings import get_settings as core_get
+
         core_get.cache_clear()
     except Exception:
         pass

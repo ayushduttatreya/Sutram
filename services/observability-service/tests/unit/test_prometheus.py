@@ -1,15 +1,15 @@
 from app.metrics.prometheus import (
-    EXECUTION_TOTAL,
-    EXECUTION_DURATION,
-    EXECUTION_COST,
-    STEP_DURATION,
-    MEMORY_LATENCY,
     ACTIVE_EXECUTIONS,
     CHECKPOINT_FAILURES,
+    EXECUTION_COST,
+    EXECUTION_DURATION,
+    EXECUTION_TOTAL,
+    MEMORY_LATENCY,
+    STEP_DURATION,
     record_execution_completed,
     record_execution_started,
-    record_step_completed,
     record_memory_searched,
+    record_step_completed,
 )
 
 
@@ -25,6 +25,7 @@ def test_all_metrics_exist():
 
 def test_record_execution_completed_does_not_raise():
     import uuid
+
     record_execution_completed(
         tenant_id=str(uuid.uuid4()),
         status="COMPLETED",
@@ -35,11 +36,13 @@ def test_record_execution_completed_does_not_raise():
 
 def test_record_execution_started_does_not_raise():
     import uuid
+
     record_execution_started(tenant_id=str(uuid.uuid4()))
 
 
 def test_record_step_completed_does_not_raise():
     import uuid
+
     record_step_completed(
         workflow_id=str(uuid.uuid4()),
         step_name="fetch",
@@ -54,6 +57,7 @@ def test_record_memory_searched_does_not_raise():
 def test_execution_duration_observes_in_seconds():
     """duration_ms is converted to seconds before observing."""
     import uuid
+
     # Just confirm it doesn't raise — values are checked by Prometheus internally
     record_execution_completed(
         tenant_id=str(uuid.uuid4()),

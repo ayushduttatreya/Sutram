@@ -1,11 +1,11 @@
 from __future__ import annotations
+
 import asyncio
 from logging.config import fileConfig
 
 from alembic import context
+from app.models.orm import AuditLogORM, ExecutionTraceORM  # noqa: F401
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from app.models.orm import ExecutionTraceORM, AuditLogORM  # noqa: F401
 from sutram_core.db.base import Base
 
 config = context.config

@@ -33,4 +33,5 @@ def test_fast_sample_rate_is_10_percent():
 
 def test_inherits_from_core_settings():
     from sutram_core.settings import CoreSettings
+
     assert issubclass(ObservabilityServiceSettings, CoreSettings)

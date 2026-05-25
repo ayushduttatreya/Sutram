@@ -11,14 +11,14 @@ def test_default_memory_service_url():
     assert s.memory_service_url == "http://memory-service:8002"
 
 
-def test_default_rate_limit_redis_uses_db3():
+def test_default_rate_limit_redis_uses_db5():
     s = APIGatewaySettings()
-    assert "/3" in s.redis_rate_limit_url
+    assert "/5" in s.redis_rate_limit_url
 
 
-def test_default_idempotency_redis_uses_db0():
+def test_default_idempotency_redis_uses_db6():
     s = APIGatewaySettings()
-    assert "/0" in s.redis_idempotency_url
+    assert "/6" in s.redis_idempotency_url
 
 
 def test_stream_timeout_defaults_to_none():

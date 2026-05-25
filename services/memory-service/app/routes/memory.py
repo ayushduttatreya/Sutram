@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 import uuid
 from typing import Annotated
@@ -35,6 +36,8 @@ from app.schemas.memory import (
 from app.settings import get_settings
 
 router = APIRouter(tags=["memory"])
+
+_logger = logging.getLogger(__name__)
 
 DBSession = Annotated[AsyncSession, Depends(get_db_session)]
 RedisCache = Annotated[aioredis.Redis, Depends(get_redis_cache)]
@@ -88,7 +91,12 @@ async def _update_access_stats_bg(
                 {"ids": item_ids, "tid": tenant_id},
             )
     except Exception:
-        pass
+        _logger.warning(
+            "Failed to update access stats for %d items (tenant %s)",
+            len(item_ids),
+            tenant_id,
+            exc_info=True,
+        )
 
 
 @router.post("/memory/items", response_model=MemoryItemResponse, status_code=201)

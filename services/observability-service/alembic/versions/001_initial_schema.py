@@ -4,8 +4,9 @@ Revision ID: 001
 Revises:
 Create Date: 2026-05-20
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "001"
@@ -24,7 +25,12 @@ def upgrade() -> None:
         sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("workflow_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("event_type", sa.Text, nullable=False),
-        sa.Column("start_time", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "start_time",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.Column("step_name", sa.Text, nullable=True),
         sa.Column("step_index", sa.Integer, nullable=True),
         sa.Column("duration_ms", sa.Integer, nullable=True),
@@ -48,7 +54,9 @@ def upgrade() -> None:
         sa.Column("action", sa.Text, nullable=False),
         sa.Column("resource_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("metadata", postgresql.JSONB, nullable=False, server_default="{}"),
-        sa.Column("timestamp", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "timestamp", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=False
+        ),
     )
     op.create_index("idx_audit_tenant_time", "audit_log", ["tenant_id", "timestamp"])
     # ADR-009: INSERT-only grant. Only effective when connecting as app_user (not superuser).

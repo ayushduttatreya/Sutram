@@ -1,16 +1,23 @@
-import pytest
 import uuid
+
+import pytest
 from app.sampling.tail_sampler import TailSampler
 
 
 @pytest.mark.asyncio
 async def test_buffer_span_stores_in_redis(fake_redis):
-    sampler = TailSampler(redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000)
+    sampler = TailSampler(
+        redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000
+    )
     execution_id = uuid.uuid4()
     await sampler.buffer_span(
         execution_id=execution_id,
         span_key="step:0",
-        span_data={"event_type": "execution.step.completed", "step_index": "0", "duration_ms": "500"},
+        span_data={
+            "event_type": "execution.step.completed",
+            "step_index": "0",
+            "duration_ms": "500",
+        },
     )
     key = f"trace:buffer:{execution_id}"
     stored = await fake_redis.hget(key, "step:0")
@@ -19,7 +26,9 @@ async def test_buffer_span_stores_in_redis(fake_redis):
 
 @pytest.mark.asyncio
 async def test_should_keep_trace_with_failure(fake_redis):
-    sampler = TailSampler(redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000)
+    sampler = TailSampler(
+        redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000
+    )
     execution_id = uuid.uuid4()
     await sampler.mark_has_failure(execution_id)
     assert await sampler.should_keep(execution_id, total_duration_ms=100) is True
@@ -27,14 +36,18 @@ async def test_should_keep_trace_with_failure(fake_redis):
 
 @pytest.mark.asyncio
 async def test_should_keep_slow_trace(fake_redis):
-    sampler = TailSampler(redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000)
+    sampler = TailSampler(
+        redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000
+    )
     execution_id = uuid.uuid4()
     assert await sampler.should_keep(execution_id, total_duration_ms=35_000) is True
 
 
 @pytest.mark.asyncio
 async def test_flush_returns_buffered_spans(fake_redis):
-    sampler = TailSampler(redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000)
+    sampler = TailSampler(
+        redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000
+    )
     execution_id = uuid.uuid4()
     await sampler.buffer_span(execution_id, "step:0", {"event_type": "execution.step.completed"})
     await sampler.buffer_span(execution_id, "step:1", {"event_type": "execution.step.completed"})
@@ -44,7 +57,9 @@ async def test_flush_returns_buffered_spans(fake_redis):
 
 @pytest.mark.asyncio
 async def test_flush_clears_buffer(fake_redis):
-    sampler = TailSampler(redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000)
+    sampler = TailSampler(
+        redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000
+    )
     execution_id = uuid.uuid4()
     await sampler.buffer_span(execution_id, "step:0", {"event_type": "execution.started"})
     await sampler.flush(execution_id)
@@ -56,7 +71,9 @@ async def test_flush_clears_buffer(fake_redis):
 @pytest.mark.asyncio
 async def test_duplicate_span_key_overwrites_not_duplicates(fake_redis):
     """Redis Hash prevents duplicate spans on PEL redelivery."""
-    sampler = TailSampler(redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000)
+    sampler = TailSampler(
+        redis=fake_redis, ttl_seconds=600, sample_rate=0.10, slow_threshold_ms=30_000
+    )
     execution_id = uuid.uuid4()
     await sampler.buffer_span(execution_id, "step:0", {"duration_ms": "500"})
     await sampler.buffer_span(execution_id, "step:0", {"duration_ms": "500"})  # same key

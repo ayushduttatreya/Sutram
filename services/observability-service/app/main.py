@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
 from app.consumer.loop import run_consumer_loop
@@ -35,6 +36,10 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    @app.get("/health", include_in_schema=False)
+    async def health() -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
     app.include_router(traces.router, prefix="/v1")
     app.include_router(audit.router, prefix="/v1")
     app.include_router(metrics_api.router, prefix="/v1")

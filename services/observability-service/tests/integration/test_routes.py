@@ -1,6 +1,7 @@
 # tests/integration/test_routes.py
 import uuid
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi.testclient import TestClient
 
 VALID_TOKEN = "dev-internal-token-change-in-production"
@@ -28,6 +29,7 @@ def test_get_traces_returns_empty_spans():
     ):
         mock_factory.return_value = mock_ctx
         from app.main import create_app
+
         with TestClient(create_app()) as client:
             resp = client.get(f"/v1/traces/{uuid.uuid4()}", headers=HEADERS)
 
@@ -55,6 +57,7 @@ def test_get_audit_logs_returns_empty():
     ):
         mock_factory.return_value = mock_ctx
         from app.main import create_app
+
         with TestClient(create_app()) as client:
             resp = client.get("/v1/audit-logs", headers=HEADERS)
 
@@ -76,6 +79,7 @@ def test_missing_internal_token_returns_422():
     ):
         mock_factory.return_value = mock_ctx
         from app.main import create_app
+
         with TestClient(create_app()) as client:
             resp = client.get(
                 f"/v1/traces/{uuid.uuid4()}",
@@ -92,6 +96,7 @@ def test_prometheus_metrics_endpoint_accessible():
         patch("app.main.run_consumer_loop", new_callable=AsyncMock),
     ):
         from app.main import create_app
+
         with TestClient(create_app()) as client:
             resp = client.get("/metrics")
     assert resp.status_code == 200

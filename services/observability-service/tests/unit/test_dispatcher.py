@@ -1,9 +1,12 @@
 import uuid
-from datetime import datetime, timezone
-from app.consumer.dispatcher import parse_event, UnknownEventType
+from datetime import UTC, datetime
+
+from app.consumer.dispatcher import UnknownEventType, parse_event
 from sutram_core.events.execution import (
-    ExecutionStartedEvent, StepCompletedEvent,
-    StepFailedEvent, ExecutionCompletedEvent,
+    ExecutionCompletedEvent,
+    ExecutionStartedEvent,
+    StepCompletedEvent,
+    StepFailedEvent,
 )
 from sutram_core.events.memory import MemoryWrittenEvent
 
@@ -13,7 +16,7 @@ def make_stream_dict(event_type: str, **extra) -> dict[str, str]:
         "event_type": event_type,
         "trace_id": str(uuid.uuid4()),
         "tenant_id": str(uuid.uuid4()),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "schema_version": "1",
         **{k: str(v) for k, v in extra.items()},
     }
@@ -88,5 +91,6 @@ def test_parses_memory_written():
 def test_unknown_event_type_raises():
     data = make_stream_dict("unknown.event.type")
     import pytest
+
     with pytest.raises(UnknownEventType):
         parse_event(data)

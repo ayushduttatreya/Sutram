@@ -1,4 +1,4 @@
-from app.models.orm import ExecutionTraceORM, AuditLogORM
+from app.models.orm import AuditLogORM, ExecutionTraceORM
 
 
 def test_tablenames():
@@ -8,9 +8,22 @@ def test_tablenames():
 
 def test_execution_trace_has_required_columns():
     cols = {c.key for c in ExecutionTraceORM.__table__.columns}
-    required = {"id", "trace_id", "execution_id", "tenant_id", "workflow_id",
-                "event_type", "start_time", "step_name", "step_index",
-                "duration_ms", "cost_usd", "status", "error_type", "error_message"}
+    required = {
+        "id",
+        "trace_id",
+        "execution_id",
+        "tenant_id",
+        "workflow_id",
+        "event_type",
+        "start_time",
+        "step_name",
+        "step_index",
+        "duration_ms",
+        "cost_usd",
+        "status",
+        "error_type",
+        "error_message",
+    }
     assert required.issubset(cols)
 
 
