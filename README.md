@@ -8,7 +8,7 @@
 
 **For everyone:** Sutram is like a safety net and memory system for AI applications. When an AI workflow crashes halfway through a complex task, Sutram saves its progress and picks up exactly where it left off — like a video game checkpoint. It also gives AI systems a long-term memory so they remember past conversations, user preferences, and decisions. Every action the AI takes is recorded so you can trace exactly what happened and why.
 
-**For engineers:** Sutram is a production-grade platform for durable workflow orchestration (checkpoint/resume via WAL-backed state machine), hybrid semantic retrieval (pgvector ANN with multi-model versioning, recency decay, and frequency reranking), multi-tenant data isolation (PostgreSQL RLS + application-layer enforcement, ADR-008 compliant pre-filter ANN queries), distributed execution coordination (Redis Streams as event bus, atomic Lua-based distributed locks), and full execution observability (OpenTelemetry, tail-based sampling, per-tenant cost attribution). The entire platform is built on boring technology — Postgres, Redis, Celery, FastAPI — so that the engineering sophistication lives in the product layer, not the infrastructure layer.
+**For engineers:** Sutram is a production-grade platform for durable workflow orchestration (checkpoint/resume via WAL-backed state machine), hybrid semantic retrieval (pgvector HNSW ANN with multi-model versioning, type-specific recency decay, and frequency reranking across both active items and compressed summaries), multi-tenant data isolation (PostgreSQL FORCE ROW LEVEL SECURITY + application-layer enforcement, ADR-008 compliant pre-filter ANN queries, SSRF-protected webhook delivery), distributed execution coordination (Redis Streams as event bus, atomic Lua-based distributed locks), and full execution observability (OpenTelemetry, tail-based sampling, per-tenant cost attribution). The entire platform is built on boring technology — Postgres, Redis, Celery, FastAPI — so that the engineering sophistication lives in the product layer, not the infrastructure layer.
 
 ---
 
@@ -152,9 +152,9 @@ Sutram gives AI systems a long-term memory that persists across sessions and is 
 
 1. **Hot cache** — Check Redis first. If someone searched for this recently, return the cached result instantly (under 5ms).
 2. **Vector search** — If not cached, search PostgreSQL using pgvector. Find the 50 most similar memories by meaning using approximate nearest-neighbor (ANN) search. The tenant filter is applied *before* the similarity sort — a critical security constraint (ADR-008).
-3. **Reranking** — Score the top 50 candidates using: `similarity × 0.6 + recency × 0.3 + frequency × 0.1`. Return the top K. More recently accessed and frequently used memories rank higher.
+3. **Reranking** — Score all candidates using: `similarity × 0.6 + recency × 0.3 + frequency × 0.1`. Recency decay is type-specific: episodic memories decay with a 30-day half-life; semantic and procedural memories never decay. Return the top K.
 
-**For engineers:** ANN queries use `ivfflat` cosine distance on pgvector. ADR-007 enforces embedding model versioning: every row stores `embedding_model`, and during provider migrations, queries group candidates by model, embed the query with the same model per group, and merge before reranking. The frequency term is capped at `min(log(access_count+1), 2.0)` to prevent high-access items from overwhelming the similarity signal. Access stats are updated post-response via FastAPI `BackgroundTasks` with a fresh DB session.
+**For engineers:** ANN queries use `hnsw` cosine distance on pgvector (partial index on `compressed = false`), which updates dynamically on insert and handles tenant-filtered queries without Voronoi cell misalignment. The search also queries `memory_summaries` (compressed/archived memories) in a second pass and merges candidates before reranking — archived memories remain retrievable. ADR-007 enforces embedding model versioning: every row stores `embedding_model`, and queries group candidates by model, embed with the same model per group, and merge before reranking. The frequency term is capped at `min(log(access_count+1), 2.0)` to prevent high-access items from overwhelming the similarity signal. Access stats are updated post-response via FastAPI `BackgroundTasks` with a fresh DB session.
 
 ### 3. Execution Observability
 
@@ -225,7 +225,7 @@ This is not an exhaustive list — it's the decisions that are interesting.
 
 ### Why PostgreSQL for Everything (Including Vectors)
 
-A separate vector database (Pinecone, Weaviate) adds an operational dependency, a billing relationship, and a failure domain. pgvector gives us ANN search with `ivfflat` indexes inside the same Postgres instance that already holds workflow state. At MVP scale this is identical in retrieval performance. When we need to cross 10M vectors per tenant, we add a dedicated vector DB — we don't need to today.
+A separate vector database (Pinecone, Weaviate) adds an operational dependency, a billing relationship, and a failure domain. pgvector gives us ANN search with `hnsw` indexes inside the same Postgres instance that already holds workflow state. HNSW was chosen over IVFFlat because it updates dynamically on insert (no periodic REINDEX), handles multi-tenant filtered queries without Voronoi cell misalignment, and provides better recall for the selective per-tenant query pattern. At MVP scale this is identical in retrieval performance to a dedicated vector DB. When we need to cross 10M vectors per tenant, we add a dedicated vector DB — we don't need to today.
 
 ### Why Redis Streams (Not Pub/Sub)
 
@@ -270,9 +270,12 @@ Sutram uses different storage systems for different access patterns.
 | Workflow state, checkpoints, tenants | PostgreSQL | ACID transactions — cannot lose this |
 | Memory embeddings | PostgreSQL + pgvector | ANN search co-located with the data it describes |
 | Hot query cache, embedding cache | Redis DB 0 | Sub-5ms lookup |
-| Distributed locks | Redis DB 2 | Isolated keyspace, no collision with cache |
-| Rate limiting counters | Redis DB 3 | Isolated keyspace |
 | Event streams | Redis DB 1 | Durable, consumer groups, replayable |
+| Distributed locks | Redis DB 2 | Isolated keyspace, no collision with cache or queues |
+| Celery broker queue | Redis DB 3 | Dedicated DB — no cross-contamination with cache or rate limits |
+| Celery result backend | Redis DB 4 | Dedicated DB |
+| Rate limiting counters | Redis DB 5 | Isolated from Celery broker (previously collided on DB 3) |
+| Idempotency dedup | Redis DB 6 | Isolated keyspace |
 | Execution traces | TimescaleDB | Time-series compression and hypertable partitioning |
 | Compressed memory archives | S3 | Low-cost, indefinite retention |
 
@@ -310,9 +313,10 @@ Security is built in layers. Breaking one layer does not break the system.
 | **Authentication** | JWT (RS256), OAuth 2.0, API keys |
 | **Authorization** | RBAC, tenant-scoped permissions |
 | **Data encryption** | TLS 1.3 in transit, AES-256 at rest |
-| **Tenant isolation** | Row-level security + application-layer scoping |
-| **Internal auth** | `X-Internal-Token` constant-time HMAC comparison on all service-to-service calls |
-| **Secrets** | Webhook secrets AES-GCM encrypted; API keys SHA-256 hashed; raw values never stored |
+| **Tenant isolation** | `FORCE ROW LEVEL SECURITY` + application-layer scoping (`set_tenant_context` in every route) + explicit `tenant_id` WHERE clauses as defense-in-depth |
+| **Internal auth** | `X-Internal-Token` constant-time HMAC comparison on all service-to-service calls; tenant identity extracted exclusively from verified `X-Tenant-ID` header, never from caller-supplied query parameters |
+| **Secrets** | Webhook secrets AES-GCM encrypted; API keys SHA-256 hashed; raw values never stored; production startup rejects all-default secrets at boot |
+| **SSRF protection** | Webhook URLs validated at registration — private IP ranges (RFC 1918, 169.254.0.0/16, loopback, IPv6 private) blocked before storage |
 | **Audit trail** | Append-only audit log, `INSERT`-only DB role — cannot be tampered with after the fact |
 
 ---
@@ -539,17 +543,17 @@ The recovery handler runs every 60 seconds and re-enqueues any execution whose h
 
 ## Roadmap
 
-### Implemented (Plans 1–3)
+### Implemented
 
 - ✅ `packages/core` — shared domain models, Redis Streams, distributed lock, embedding registry, auth middleware
-- ✅ `workflow-service` — full execution engine with checkpoint/resume, Celery workers, recovery handler, webhooks, SSE
-- ✅ `memory-service` — pgvector ANN search, multi-model versioning, reranker, Redis cache, LLM compression, S3 archival
+- ✅ `workflow-service` — full execution engine with checkpoint/resume, Celery workers, recovery handler, webhooks with SSRF protection, SSE streaming; all routes enforce tenant auth via `X-Internal-Token` + `X-Tenant-ID` headers; `FORCE ROW LEVEL SECURITY` on all tenant tables
+- ✅ `memory-service` — pgvector HNSW ANN search, multi-model versioning, type-specific reranker, Redis cache, LLM compression, S3 archival; summaries searched alongside active items so compressed memories stay retrievable
+- ✅ `api-gateway` — JWT verification, rate limiting, idempotency, reverse proxy
+- ✅ `observability-service` — Redis Streams consumer, tail-based sampling, Prometheus metrics, audit log
 
-### In Progress (Plans 4–6)
+### In Progress
 
-- 🔧 `api-gateway` — JWT verification, rate limiting, routing, Schemathesis contract tests
-- 🔧 `observability-service` — Redis Streams consumer, tail-based sampling, Prometheus metrics, audit log
-- 🔧 `sutram-sdk` — decorator API, typed async/sync client, PyPI publish, GitHub Actions CI
+- 🔧 `sutram-sdk` — decorator API, typed async/sync client, PyPI publish
 
 ### Post-MVP
 
@@ -586,7 +590,7 @@ The recovery handler runs every 60 seconds and re-enqueues any execution whose h
 
 | Field | Value |
 |---|---|
-| Version | 2.0 |
+| Version | 2.1 |
 | Status | Active Development |
 | Last Updated | May 2026 |
 | Scope | MVP architecture, production direction, implementation status |
