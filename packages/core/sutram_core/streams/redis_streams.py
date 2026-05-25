@@ -12,7 +12,7 @@ class StreamProducer:
     async def publish(self, stream: str, event: BaseEvent) -> str:
         """Publish event to Redis Stream. Returns message ID as string."""
         data = event.to_stream_dict()
-        message_id = await self._redis.xadd(stream, data)  # type: ignore[arg-type]
+        message_id = await self._redis.xadd(stream, data, maxlen=10_000, approximate=True)  # type: ignore[arg-type]
         return message_id.decode() if isinstance(message_id, bytes) else message_id
 
 

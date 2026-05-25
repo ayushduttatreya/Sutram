@@ -1,15 +1,20 @@
 # app/routes/executions.py
 from __future__ import annotations
 
+import asyncio
+import json
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import redis.asyncio as aioredis
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sutram_core.middleware.tenant import set_tenant_context
 from sutram_core.models.execution import ExecutionContext, ExecutionStatus
 
-from app.dependencies import get_db_session
+from app.dependencies import get_db_session, get_redis_streams_for_sse, get_tenant_id_from_header
 from app.engine.state_machine import ExecutionFSM, InvalidTransitionError
 from app.models.orm import WorkflowExecutionORM, WorkflowORM
 from app.schemas.workflows import ExecuteWorkflowRequest, ExecutionResponse
@@ -17,6 +22,8 @@ from app.schemas.workflows import ExecuteWorkflowRequest, ExecutionResponse
 router = APIRouter(tags=["executions"])
 
 DBSession = Annotated[AsyncSession, Depends(get_db_session)]
+RedisDep = Annotated[aioredis.Redis, Depends(get_redis_streams_for_sse)]
+TenantID = Annotated[uuid.UUID, Depends(get_tenant_id_from_header)]
 
 
 @router.post("/workflows/{workflow_id}/execute", response_model=ExecutionResponse, status_code=202)
@@ -24,8 +31,9 @@ async def execute(
     workflow_id: uuid.UUID,
     body: ExecuteWorkflowRequest,
     session: DBSession,
-    tenant_id: uuid.UUID = Query(...),  # noqa: B008
+    tenant_id: TenantID,
 ) -> WorkflowExecutionORM:
+    await set_tenant_context(session, str(tenant_id))
     # Verify workflow exists
     wf_result = await session.execute(select(WorkflowORM).where(WorkflowORM.id == workflow_id))
     if wf_result.scalar_one_or_none() is None:
@@ -47,10 +55,8 @@ async def execute(
     )
     session.add(execution)
     await session.flush()
+    await session.commit()
 
-    # Enqueue to Celery — NOTE: this fires before session.commit().
-    # If commit fails, the task finds execution=None (row rolled back) → silent exit.
-    # Acceptable for execute path. Resume path has pre-existing execution so it is safe.
     from app.tasks.execute import execute_workflow
 
     execute_workflow.delay(execution_id=str(exec_id))
@@ -62,9 +68,14 @@ async def execute(
 async def get_execution(
     execution_id: uuid.UUID,
     session: DBSession,
+    tenant_id: TenantID,
 ) -> WorkflowExecutionORM:
+    await set_tenant_context(session, str(tenant_id))
     result = await session.execute(
-        select(WorkflowExecutionORM).where(WorkflowExecutionORM.id == execution_id)
+        select(WorkflowExecutionORM).where(
+            WorkflowExecutionORM.id == execution_id,
+            WorkflowExecutionORM.tenant_id == tenant_id,
+        )
     )
     ex = result.scalar_one_or_none()
     if ex is None:
@@ -76,9 +87,14 @@ async def get_execution(
 async def pause_execution(
     execution_id: uuid.UUID,
     session: DBSession,
+    tenant_id: TenantID,
 ) -> WorkflowExecutionORM:
+    await set_tenant_context(session, str(tenant_id))
     result = await session.execute(
-        select(WorkflowExecutionORM).where(WorkflowExecutionORM.id == execution_id)
+        select(WorkflowExecutionORM).where(
+            WorkflowExecutionORM.id == execution_id,
+            WorkflowExecutionORM.tenant_id == tenant_id,
+        )
     )
     ex = result.scalar_one_or_none()
     if ex is None:
@@ -98,9 +114,14 @@ async def pause_execution(
 async def resume_execution(
     execution_id: uuid.UUID,
     session: DBSession,
+    tenant_id: TenantID,
 ) -> WorkflowExecutionORM:
+    await set_tenant_context(session, str(tenant_id))
     result = await session.execute(
-        select(WorkflowExecutionORM).where(WorkflowExecutionORM.id == execution_id)
+        select(WorkflowExecutionORM).where(
+            WorkflowExecutionORM.id == execution_id,
+            WorkflowExecutionORM.tenant_id == tenant_id,
+        )
     )
     ex = result.scalar_one_or_none()
     if ex is None:
@@ -113,7 +134,7 @@ async def resume_execution(
         await session.flush()
     except InvalidTransitionError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
-    # Enqueue AFTER flush — still before commit, but delay is moved after state change
+    await session.commit()
     from app.tasks.execute import execute_workflow
 
     execute_workflow.delay(execution_id=str(execution_id))
@@ -124,9 +145,14 @@ async def resume_execution(
 async def cancel_execution(
     execution_id: uuid.UUID,
     session: DBSession,
+    tenant_id: TenantID,
 ) -> WorkflowExecutionORM:
+    await set_tenant_context(session, str(tenant_id))
     result = await session.execute(
-        select(WorkflowExecutionORM).where(WorkflowExecutionORM.id == execution_id)
+        select(WorkflowExecutionORM).where(
+            WorkflowExecutionORM.id == execution_id,
+            WorkflowExecutionORM.tenant_id == tenant_id,
+        )
     )
     ex = result.scalar_one_or_none()
     if ex is None:
@@ -139,3 +165,72 @@ async def cancel_execution(
     except InvalidTransitionError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     return ex
+
+
+@router.get("/executions/{execution_id}/stream")
+async def stream_execution(
+    execution_id: uuid.UUID,
+    redis: RedisDep,
+    tenant_id: TenantID,
+) -> StreamingResponse:
+    """SSE stream of execution events for real-time monitoring.
+
+    Subscribes to the per-execution Redis Stream `execution:{id}` and yields
+    events as Server-Sent Events. Closes when a terminal event is received
+    or the client disconnects.
+    """
+    # Verify ownership before streaming
+    from app.dependencies import get_db_session_context
+
+    async with get_db_session_context() as check_session:
+        r = await check_session.execute(
+            select(WorkflowExecutionORM.id).where(
+                WorkflowExecutionORM.id == execution_id,
+                WorkflowExecutionORM.tenant_id == tenant_id,
+            )
+        )
+        if r.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Execution not found")
+
+    stream_key = f"execution:{execution_id}"
+    group = "sse-stream-consumers"
+    consumer_name = f"sse-{uuid.uuid4()}"
+
+    # Create consumer group idempotently
+    try:
+        await redis.xgroup_create(stream_key, group, id="0", mkstream=True)
+    except aioredis.ResponseError as e:
+        if "BUSYGROUP" not in str(e):
+            raise
+
+    async def event_generator():
+        _TERMINAL = {"execution.completed", "execution.paused", "execution.failed"}
+        try:
+            while True:
+                results = await redis.xreadgroup(
+                    groupname=group,
+                    consumername=consumer_name,
+                    streams={stream_key: ">"},
+                    count=10,
+                    block=1000,
+                )
+                if not results:
+                    continue
+                for _stream, entries in results:
+                    for msg_id, fields in entries:
+                        decoded = {
+                            k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v
+                            for k, v in fields.items()
+                        }
+                        await redis.xack(stream_key, group, msg_id)
+                        yield f"event: {decoded.get('event_type', 'message')}\ndata: {json.dumps(decoded)}\n\n"
+                        if decoded.get("event_type") in _TERMINAL:
+                            return
+        except asyncio.CancelledError:
+            return
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
