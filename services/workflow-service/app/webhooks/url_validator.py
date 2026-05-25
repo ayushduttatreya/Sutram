@@ -18,9 +18,11 @@ _BLOCKED_NETWORKS = [
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("127.0.0.0/8"),       # loopback
     ipaddress.ip_network("169.254.0.0/16"),     # link-local / AWS IMDS
+    ipaddress.ip_network("0.0.0.0/32"),         # unspecified address → localhost on Linux
     ipaddress.ip_network("::1/128"),            # IPv6 loopback
     ipaddress.ip_network("fc00::/7"),           # IPv6 private
     ipaddress.ip_network("fe80::/10"),          # IPv6 link-local
+    ipaddress.ip_network("::ffff:0:0/96"),      # IPv4-mapped IPv6 (bypasses IPv4 checks)
 ]
 
 

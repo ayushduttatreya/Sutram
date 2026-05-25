@@ -38,6 +38,11 @@ def decode_jwt(token: str, algorithm: str | None = None) -> dict[str, Any]:
     try:
         secret = get_jwt_secret()
         alg = algorithm or get_jwt_algorithm()
+        header = jwt.get_unverified_header(token)
+        if header.get("alg") != alg:
+            raise AuthError(
+                f"Token algorithm {header.get('alg')!r} does not match configured {alg!r}"
+            )
         claims: dict[str, Any] = cast(dict[str, Any], jwt.decode(token, secret, algorithms=[alg]))
         if "tenant_id" not in claims:
             raise AuthError("Missing tenant_id claim")
