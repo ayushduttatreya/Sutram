@@ -13,14 +13,28 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sutram_core.middleware.internal_auth import InternalAuthError, verify_internal_token
 
 from app.dependencies import get_db_session
 from app.models.orm import TenantORM
 
-router = APIRouter(tags=["internal"])
+
+async def _verify_internal(
+    x_internal_token: str = Header(..., alias="X-Internal-Token"),  # noqa: B008
+) -> None:
+    from app.settings import get_settings
+
+    settings = get_settings()
+    try:
+        verify_internal_token(x_internal_token, settings.internal_auth_token)
+    except InternalAuthError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+
+
+router = APIRouter(tags=["internal"], dependencies=[Depends(_verify_internal)])
 
 DBSession = Annotated[AsyncSession, Depends(get_db_session)]
 

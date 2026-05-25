@@ -84,3 +84,16 @@ def test_get_execution_not_found(client):
         mock_factory.return_value = mock_ctx
         response = client.get(f"/v1/executions/{uuid.uuid4()}")
         assert response.status_code == 404
+
+
+def test_stream_execution_returns_event_stream(client):
+    """SSE endpoint returns text/event-stream content type."""
+    mock_redis = AsyncMock()
+    mock_redis.xgroup_create = AsyncMock(side_effect=Exception("BUSYGROUP"))
+    mock_redis.xreadgroup = AsyncMock(return_value=[])
+    mock_redis.xack = AsyncMock()
+
+    with patch("app.dependencies._redis_streams", mock_redis):
+        resp = client.get(f"/v1/executions/{uuid.uuid4()}/stream")
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
