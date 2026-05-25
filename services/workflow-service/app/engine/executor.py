@@ -169,6 +169,14 @@ class Executor:
                 current_step_name = "unknown"
                 try:
                     for i in range(start_index, len(steps)):
+                        # Re-read execution status to honor external pause/cancel signals
+                        await self._session.refresh(execution)
+                        if execution.status in (
+                            ExecutionStatus.PAUSED.value,
+                            ExecutionStatus.CANCELLED.value,
+                        ):
+                            return  # Stop processing; leave status as-is
+
                         step = steps[i]
                         current_step_name = step.config.name
 

@@ -1,12 +1,12 @@
 """Background recovery handler: detects stale executions and re-enqueues them.
 
 Design:
-- Runs as an asyncio background task inside the web process (NOT a Celery worker)
-- Every `interval_seconds` (default 60): queries for RUNNING executions with stale heartbeat
-- For each stale execution:
+- Runs as a Celery beat task (workflow.recover_stale_executions) every 60 seconds.
+- For each stale RUNNING execution:
   - Try to acquire `execution:{id}:lock`
   - LockAcquisitionError → original worker is still alive, skip
-  - Lock acquired → original worker is dead, re-enqueue via Celery, release lock immediately
+  - Lock acquired → worker is dead; enqueue via Celery WHILE holding the lock to
+    prevent concurrent recovery pods from double-enqueueing the same execution.
 - RLS bypass requirement: this handler must query across ALL tenants.
   In development, the superuser role bypasses RLS. In production, use a SECURITY DEFINER
   function or connect with a role that has BYPASSRLS privilege.
@@ -38,18 +38,30 @@ class RecoveryHandler:
         Returns True if re-enqueued (worker was dead).
         Returns False if lock is held (worker is still alive).
 
-        The lock is acquired and immediately released to confirm the worker is dead.
-        Enqueueing happens AFTER lock release to avoid the new worker racing against
-        the recovery handler's still-held lock.
+        The lock is held during enqueue to prevent a concurrent recovery pod from
+        also acquiring the lock and double-enqueueing the same execution.
         """
         try:
             async with self._lock.acquire(f"execution:{execution_id}:lock", ttl_seconds=30):
-                pass  # confirms worker is dead; lock is released on context exit
+                # Worker is dead (lock acquired). Enqueue while holding the lock
+                # so no other recovery pod can race us and enqueue a duplicate.
+                await self._enqueue(str(execution_id))
         except LockAcquisitionError:
             return False
-        # Lock is released — safe to enqueue without racing the new worker
-        await self._enqueue(str(execution_id))
         return True
+
+    async def run_once(
+        self,
+        get_stale_executions: Callable[[], Awaitable[list[uuid.UUID]]],
+    ) -> None:
+        """Single recovery scan: query for stale executions and try to recover each one.
+
+        Called by the Celery beat task every 60 seconds. Exceptions are logged and
+        re-raised so the beat task can report failure.
+        """
+        stale = await get_stale_executions()
+        for execution_id in stale:
+            await self.try_recover(execution_id)
 
     async def run_forever(
         self,
@@ -58,9 +70,9 @@ class RecoveryHandler:
     ) -> None:
         """Background loop: poll for stale executions and try to recover each one.
 
-        Exceptions inside the loop are logged and swallowed to prevent the recovery
-        handler from crashing the entire web process. asyncio.CancelledError propagates
-        for graceful shutdown.
+        Deprecated: prefer the Celery beat task (run_once). Kept for local dev/testing.
+        Exceptions inside the loop are logged and swallowed. asyncio.CancelledError
+        propagates for graceful shutdown.
         """
         import logging
 
@@ -68,9 +80,7 @@ class RecoveryHandler:
 
         while True:
             try:
-                stale = await get_stale_executions()
-                for execution_id in stale:
-                    await self.try_recover(execution_id)
+                await self.run_once(get_stale_executions)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

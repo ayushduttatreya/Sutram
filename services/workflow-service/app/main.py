@@ -12,27 +12,9 @@ from app.routes import executions, internal, webhooks, workflows
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    import asyncio
-    import contextlib
-
     init_db()
     init_redis()
-
-    from app.dependencies import get_redis_lock
-    from app.engine.recovery import RecoveryHandler, get_stale_executions
-    from app.tasks.execute import execute_workflow
-
-    async def _enqueue(execution_id: str) -> None:
-        execute_workflow.delay(execution_id=execution_id)
-
-    recovery_handler = RecoveryHandler(lock=get_redis_lock(), enqueue_fn=_enqueue)
-    recovery_task = asyncio.create_task(recovery_handler.run_forever(get_stale_executions))
-
     yield
-
-    recovery_task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await recovery_task
     await close_redis()
 
 
@@ -44,6 +26,28 @@ def create_app() -> FastAPI:
     )
     @app.get("/health", include_in_schema=False)
     async def health() -> JSONResponse:
+        from sqlalchemy import text
+
+        from app.dependencies import _redis_streams, get_db_session_context
+
+        errors: dict[str, str] = {}
+
+        if _redis_streams is None:
+            errors["redis"] = "unreachable"
+        else:
+            try:
+                await _redis_streams.ping()
+            except Exception:
+                errors["redis"] = "unreachable"
+
+        try:
+            async with get_db_session_context() as session:
+                await session.execute(text("SELECT 1"))
+        except Exception:
+            errors["db"] = "unreachable"
+
+        if errors:
+            return JSONResponse({"status": "degraded", **errors}, status_code=503)
         return JSONResponse({"status": "ok"})
 
     app.include_router(workflows.router, prefix="/v1")

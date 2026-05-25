@@ -14,6 +14,7 @@ _TRANSITIONS: dict[ExecutionStatus, dict[str, ExecutionStatus]] = {
         "manual_pause": ExecutionStatus.PAUSED,
         "fatal_error": ExecutionStatus.FAILED,
         "max_retries_exceeded": ExecutionStatus.FAILED,
+        "cancel": ExecutionStatus.CANCELLED,
     },
     ExecutionStatus.PAUSED: {
         # API re-queues as PENDING; worker transitions PENDING→RUNNING on pickup
