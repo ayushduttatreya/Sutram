@@ -22,16 +22,16 @@ RETRY_DELAYS = [1, 5, 30, 300, 1800]  # seconds between attempts
     max_retries=len(RETRY_DELAYS),
     acks_late=True,
 )
-def deliver_webhook(self: Task, delivery_id: str) -> None:
+def deliver_webhook(self: Task, delivery_id: str, tenant_id: str) -> None:
     """Attempt delivery of a webhook. Retries with exponential-ish backoff."""
     import asyncio
 
-    retry_delay = asyncio.run(_deliver(delivery_id, attempt=self.request.retries))
+    retry_delay = asyncio.run(_deliver(delivery_id, tenant_id, attempt=self.request.retries))
     if retry_delay is not None:
         raise self.retry(countdown=retry_delay)
 
 
-async def _deliver(delivery_id: str, attempt: int) -> int | None:
+async def _deliver(delivery_id: str, tenant_id: str, attempt: int) -> int | None:
     """Returns retry countdown seconds if a retry is needed, None otherwise."""
     import httpx
     from sqlalchemy import select
@@ -41,10 +41,12 @@ async def _deliver(delivery_id: str, attempt: int) -> int | None:
     from app.settings import get_settings
     from app.webhooks.crypto import decrypt_secret
     from app.webhooks.dispatcher import WebhookDispatcher
+    from sutram_core.middleware.tenant import set_tenant_context
 
     settings = get_settings()
 
     async with get_db_session_context() as session:
+        await set_tenant_context(session, tenant_id)
         result = await session.execute(
             select(WebhookDeliveryORM).where(WebhookDeliveryORM.id == delivery_id)
         )

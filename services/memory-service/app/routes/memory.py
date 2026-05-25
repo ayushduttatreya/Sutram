@@ -83,6 +83,7 @@ async def _update_access_stats_bg(
 
     try:
         async with get_db_session_context() as fresh_session:
+            await set_tenant_context(fresh_session, str(tenant_id))
             await fresh_session.execute(
                 text(
                     "UPDATE memory_items SET accessed_at = NOW(), access_count = access_count + 1 "

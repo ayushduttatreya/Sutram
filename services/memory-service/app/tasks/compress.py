@@ -25,8 +25,12 @@ async def _compress_all() -> None:
     logger = logging.getLogger(__name__)
     embedder = get_embedder()
 
-    # NOTE: No set_tenant_context — this job bypasses RLS to process all tenants
+    # NOTE: This job must query across all tenants, bypassing per-tenant RLS.
+    # SET LOCAL row_security = off requires a superuser or BYPASSRLS-privileged connection.
+    # TODO(production): provision a dedicated compression role with BYPASSRLS and use it
+    #   via a separate compression_database_url setting instead of relying on superuser.
     async with get_db_session_context() as session:
+        await session.execute(text("SET LOCAL row_security = off"))
         from datetime import datetime as _dt
         from datetime import timedelta
 
@@ -48,6 +52,7 @@ async def _compress_all() -> None:
     for tenant_id in tenant_ids:
         try:
             async with get_db_session_context() as session:
+                await session.execute(text("SET LOCAL row_security = off"))
                 compressor = Compressor(session=session, embedder=embedder)
                 count = await compressor.compress_tenant(tenant_id)
                 if count:
