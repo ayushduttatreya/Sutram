@@ -16,6 +16,9 @@ exporters:
     endpoint: "0.0.0.0:8889"
   debug:
     verbosity: basic
+  # Uncomment and configure for production trace storage (Jaeger, Tempo, etc.)
+  # otlphttp/jaeger:
+  #   endpoint: "http://jaeger:4318"
 
 service:
   pipelines:

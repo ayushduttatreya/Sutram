@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.dependencies import (
     close_embedding,
@@ -31,6 +32,10 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    @app.get("/health", include_in_schema=False)
+    async def health() -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
     app.include_router(memory.router, prefix="/v1")
     return app
 
