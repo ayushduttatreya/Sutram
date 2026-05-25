@@ -18,6 +18,7 @@ class CoreSettings(BaseSettings):
     jwt_algorithm: str = "HS256"
     internal_auth_token: str = "dev-internal-token-change-in-production"
     openai_api_key: str = ""
+    sutram_env: str = "development"  # set to "production" or "staging" to enable secret validation
 
 
 @lru_cache

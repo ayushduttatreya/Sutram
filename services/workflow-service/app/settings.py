@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from sutram_core.settings import CoreSettings
 
 
@@ -27,6 +28,27 @@ class WorkflowServiceSettings(CoreSettings):  # type: ignore[misc]
     max_concurrent_executions_global: int = 1000
     execution_heartbeat_interval_seconds: int = 15
     execution_stale_threshold_minutes: int = 5
+
+    @model_validator(mode="after")
+    def validate_secrets_in_production(self) -> "WorkflowServiceSettings":
+        if self.sutram_env == "development":
+            return self
+        _ZERO_KEY = "0" * 64
+        if self.webhook_secret_encryption_key == _ZERO_KEY:
+            raise ValueError(
+                "WEBHOOK_SECRET_ENCRYPTION_KEY must be set to a random 64-char hex string "
+                "in non-development environments. "
+                'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+        if self.jwt_secret == "dev-secret-change-in-production":
+            raise ValueError(
+                "JWT_SECRET must be changed from the default in non-development environments."
+            )
+        if self.internal_auth_token == "dev-internal-token-change-in-production":
+            raise ValueError(
+                "INTERNAL_AUTH_TOKEN must be changed from the default in non-development environments."
+            )
+        return self
 
 
 @lru_cache
