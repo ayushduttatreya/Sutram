@@ -76,3 +76,31 @@ class RecoveryHandler:
             except Exception as e:
                 logger.warning("Recovery handler error (will retry): %s", e, exc_info=True)
             await asyncio.sleep(interval_seconds)
+
+
+async def get_stale_executions() -> list[uuid.UUID]:
+    """Query for RUNNING executions with a stale heartbeat (worker likely dead).
+
+    Uses the service's own DB session. No tenant context needed — this is a
+    cross-tenant administrative query (superuser bypasses RLS by design here).
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.dependencies import get_db_session_context
+    from app.models.orm import WorkflowExecutionORM
+    from app.settings import get_settings
+
+    settings = get_settings()
+    threshold_minutes = settings.execution_stale_threshold_minutes
+    cutoff = datetime.now(UTC) - timedelta(minutes=threshold_minutes)
+
+    async with get_db_session_context() as session:
+        result = await session.execute(
+            select(WorkflowExecutionORM.id).where(
+                WorkflowExecutionORM.status == "RUNNING",
+                WorkflowExecutionORM.last_heartbeat < cutoff,
+            )
+        )
+        return [row[0] for row in result]
