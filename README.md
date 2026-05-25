@@ -127,14 +127,14 @@ Sutram runs AI workflows as resumable state machines. Each execution is tracked 
 
 ```
 PENDING → RUNNING → COMPLETED
-              │
+              │   └→ CANCELLED (via /cancel)
               └→ PAUSED (recoverable error)
                     └→ RUNNING (on resume)
                     └→ CANCELLED
               └→ FAILED (unrecoverable)
 ```
 
-**For engineers:** Checkpoint creation uses a write-ahead log (WAL) pattern — WAL append → atomic DB write → WAL commit. Recovery is handled by a background heartbeat monitor that detects stale executions and re-enqueues them to Celery. Distributed locking (atomic Lua, Redis `SET NX EX`) prevents split-brain: two workers can never simultaneously advance the same execution. The state machine rejects all invalid transitions (`InvalidTransitionError`), making status corruption impossible through normal code paths.
+**For engineers:** Checkpoint creation uses a write-ahead log (WAL) pattern — WAL append → atomic DB write → WAL commit. Recovery runs as a Celery beat task (`workflow.recover_stale_executions`, every 60 seconds) — not inside the web process — so recovery is never silenced by a web pod restart. The recovery task holds the execution lock *across the enqueue call* to prevent concurrent recovery pods from double-enqueueing the same execution. The executor re-reads execution status from the database at each step boundary, so a `/pause` or `/cancel` API call takes effect before the next step begins. Distributed locking (atomic Lua, Redis `SET NX EX`) prevents split-brain: two workers can never simultaneously advance the same execution. The state machine rejects all invalid transitions (`InvalidTransitionError`), and `cancel` is valid from both `RUNNING` and `PAUSED` states.
 
 ### 2. Persistent Semantic Memory
 
@@ -154,7 +154,7 @@ Sutram gives AI systems a long-term memory that persists across sessions and is 
 2. **Vector search** — If not cached, search PostgreSQL using pgvector. Find the 50 most similar memories by meaning using approximate nearest-neighbor (ANN) search. The tenant filter is applied *before* the similarity sort — a critical security constraint (ADR-008).
 3. **Reranking** — Score all candidates using: `similarity × 0.6 + recency × 0.3 + frequency × 0.1`. Recency decay is type-specific: episodic memories decay with a 30-day half-life; semantic and procedural memories never decay. Return the top K.
 
-**For engineers:** ANN queries use `hnsw` cosine distance on pgvector (partial index on `compressed = false`), which updates dynamically on insert and handles tenant-filtered queries without Voronoi cell misalignment. The search also queries `memory_summaries` (compressed/archived memories) in a second pass and merges candidates before reranking — archived memories remain retrievable. ADR-007 enforces embedding model versioning: every row stores `embedding_model`, and queries group candidates by model, embed with the same model per group, and merge before reranking. The frequency term is capped at `min(log(access_count+1), 2.0)` to prevent high-access items from overwhelming the similarity signal. Access stats are updated post-response via FastAPI `BackgroundTasks` with a fresh DB session.
+**For engineers:** ANN queries use `hnsw` cosine distance on pgvector (partial index on `compressed = false`), which updates dynamically on insert and handles tenant-filtered queries without Voronoi cell misalignment. The search also queries `memory_summaries` (compressed/archived memories) in a second pass and merges candidates before reranking — archived memories remain retrievable. ADR-007 enforces embedding model versioning: every row stores `embedding_model`, and queries group candidates by model, embed with the same model per group, and merge before reranking. The frequency term is capped at `min(log(access_count+1), 2.0)` to prevent high-access items from overwhelming the similarity signal. Access stats (`access_count`, `accessed_at`) are updated post-response via FastAPI `BackgroundTasks` with a fresh DB session and explicit tenant context.
 
 ### 3. Execution Observability
 
@@ -199,11 +199,11 @@ packages/
                            #         auth middleware, embedding registry, DB session
 
 infra/
-├── docker-compose.yml     # Full stack
+├── docker-compose.yml     # Full stack (includes workflow-worker + memory-worker)
 ├── postgres/init.sql      # pgvector + RLS setup
 ├── pgbouncer/             # Connection pooling (prevents Postgres saturation)
-├── redis/redis.conf       # AOF persistence, 4 logical DBs
-└── grafana/               # Pre-built dashboards
+├── redis/redis.conf       # AOF persistence, 7 logical DBs
+└── grafana/               # Dashboards (Prometheus datasource pre-wired)
 
 sdk/                       # pip install sutram-sdk
 ```
@@ -215,7 +215,7 @@ Services communicate two ways:
 1. **HTTP (synchronous)** — When one service needs a response. Gateway proxies to workflow-service or memory-service. Workflow-service calls memory-service during step execution.
 2. **Redis Streams (asynchronous)** — When a service needs to emit an event that doesn't need a reply. Workflow-service publishes execution events; observability-service consumes them. Redis Streams (not pub/sub) ensures messages are durable — if the consumer is down, messages queue up and are processed when it recovers.
 
-**Internal auth:** Every service-to-service call carries `X-Internal-Token` (constant-time HMAC comparison). Tenant context is carried via `X-Tenant-ID` header, set by the gateway after JWT verification.
+**Internal auth:** Every service-to-service call carries `X-Internal-Token` (constant-time HMAC comparison). Tenant context is carried via `X-Tenant-ID` header, set by the gateway after JWT verification. JWT algorithm is pinned at decode time — the token's `alg` header is validated against the configured algorithm before `jwt.decode`, preventing algorithm confusion attacks.
 
 ---
 
@@ -316,7 +316,7 @@ Security is built in layers. Breaking one layer does not break the system.
 | **Tenant isolation** | `FORCE ROW LEVEL SECURITY` + application-layer scoping (`set_tenant_context` in every route) + explicit `tenant_id` WHERE clauses as defense-in-depth |
 | **Internal auth** | `X-Internal-Token` constant-time HMAC comparison on all service-to-service calls; tenant identity extracted exclusively from verified `X-Tenant-ID` header, never from caller-supplied query parameters |
 | **Secrets** | Webhook secrets AES-GCM encrypted; API keys SHA-256 hashed; raw values never stored; production startup rejects all-default secrets at boot |
-| **SSRF protection** | Webhook URLs validated at registration — private IP ranges (RFC 1918, 169.254.0.0/16, loopback, IPv6 private) blocked before storage |
+| **SSRF protection** | Webhook URLs validated at registration *and* immediately before every delivery — private IP ranges (RFC 1918, 169.254.0.0/16, loopback, IPv6 private, IPv4-mapped IPv6 `::ffff:0:0/96`, `0.0.0.0`) blocked; re-validation at delivery time prevents DNS rebinding attacks |
 | **Audit trail** | Append-only audit log, `INSERT`-only DB role — cannot be tampered with after the fact |
 
 ---
@@ -329,13 +329,13 @@ Sutram assumes failures will happen and designs for safe recovery rather than tr
 
 | Failure | Sutram's Response |
 |---|---|
-| Worker process crash mid-execution | Heartbeat goes stale in <5 min; recovery handler re-enqueues; Celery resumes from latest checkpoint |
+| Worker process crash mid-execution | Heartbeat goes stale in <5 min; Celery beat recovery task re-enqueues; Celery resumes from latest checkpoint |
 | Database primary failure | RDS promotes standby; services reconnect; checkpoint state intact |
 | LLM API timeout or 5xx | Step retried up to N times with exponential backoff; execution paused if retries exhausted |
 | Redis restart | Streams are persisted via AOF; consumer groups resume from last ACK'd offset |
 | Network partition | Execution pauses; state preserved; resumes when connectivity returns |
 
-**Split-brain prevention:** Before any state mutation, the executor acquires `execution:{id}:lock` in Redis. If the recovery handler tries to re-enqueue a stuck execution while the original worker is just slow (not dead), it gets `LockAcquisitionError` and skips — no double-execution. The lock is released *after* re-enqueueing — not before — so the new worker doesn't race against the recovery handler's still-held lock.
+**Split-brain prevention:** Before any state mutation, the executor acquires `execution:{id}:lock` in Redis. If the recovery handler tries to re-enqueue a stuck execution while the original worker is just slow (not dead), it gets `LockAcquisitionError` and skips — no double-execution. The lock is held *through* the enqueue call and released only after the Celery task is queued — this prevents a second recovery pod from racing to claim the same lock and producing a duplicate task.
 
 **Recovery targets:**
 
@@ -355,11 +355,11 @@ Sutram assumes failures will happen and designs for safe recovery rather than tr
 ### Local Development
 
 ```bash
-make dev         # Start full stack: Postgres, PgBouncer, Redis, all services, Grafana
+make dev         # Start full stack: Postgres, PgBouncer, Redis, all services + workers, Grafana
 make seed        # Create dev tenant, API key, example workflow
-make test        # Run all tests against isolated test DBs
+make test        # Run all tests (packages/ + services/) against isolated test DBs
 make lint        # ruff check + format check
-make typecheck   # mypy
+make typecheck   # mypy (packages/core)
 ```
 
 ### Production Topology (Single Region MVP)
@@ -533,11 +533,12 @@ make seed         # Creates a dev tenant and seeds example data
 
 ### Stuck Executions
 
-The recovery handler runs every 60 seconds and re-enqueues any execution whose heartbeat is older than 5 minutes. If executions are piling up in RUNNING state:
+The recovery Celery beat task runs every 60 seconds and re-enqueues any execution whose heartbeat is older than 5 minutes. If executions are piling up in RUNNING state:
 
 1. Check worker pod count and queue depth in Grafana
 2. Scale workers if queue is backed up
-3. If single execution is stuck: inspect its last checkpoint and error message via `GET /v1/executions/{id}`
+3. If a single execution is stuck: inspect its last checkpoint and error message via `GET /v1/executions/{id}`
+4. To cancel a stuck execution while it is running: `POST /v1/executions/{id}/cancel` — the executor will stop at the next step boundary
 
 ---
 
@@ -545,10 +546,10 @@ The recovery handler runs every 60 seconds and re-enqueues any execution whose h
 
 ### Implemented
 
-- ✅ `packages/core` — shared domain models, Redis Streams, distributed lock, embedding registry, auth middleware
-- ✅ `workflow-service` — full execution engine with checkpoint/resume, Celery workers, recovery handler, webhooks with SSRF protection, SSE streaming; all routes enforce tenant auth via `X-Internal-Token` + `X-Tenant-ID` headers; `FORCE ROW LEVEL SECURITY` on all tenant tables
-- ✅ `memory-service` — pgvector HNSW ANN search, multi-model versioning, type-specific reranker, Redis cache, LLM compression, S3 archival; summaries searched alongside active items so compressed memories stay retrievable
-- ✅ `api-gateway` — JWT verification, rate limiting, idempotency, reverse proxy
+- ✅ `packages/core` — shared domain models, Redis Streams, distributed lock, embedding registry, auth middleware (JWT algorithm pinning, algorithm confusion protection)
+- ✅ `workflow-service` — full execution engine with checkpoint/resume, Celery workers, recovery beat task (multi-pod safe, lock held across enqueue), webhooks with SSRF protection (registration + delivery-time re-validation, IPv4-mapped IPv6 blocked), SSE streaming, workflow definition snapshot at execution creation, pause/cancel honored at step boundary; `FORCE ROW LEVEL SECURITY` on all tenant tables; all Celery tasks set tenant RLS context before querying
+- ✅ `memory-service` — pgvector HNSW ANN search, multi-model versioning, type-specific reranker, Redis cache, LLM compression, S3 archival; summaries searched alongside active items; access stats updated with correct tenant context
+- ✅ `api-gateway` — JWT verification (algorithm-pinned), rate limiting, idempotency (key cleared on 5xx so clients can retry), reverse proxy; health endpoint checks Redis + upstream reachability
 - ✅ `observability-service` — Redis Streams consumer, tail-based sampling, Prometheus metrics, audit log
 
 ### In Progress
@@ -590,7 +591,7 @@ The recovery handler runs every 60 seconds and re-enqueues any execution whose h
 
 | Field | Value |
 |---|---|
-| Version | 2.1 |
+| Version | 2.2 |
 | Status | Active Development |
 | Last Updated | May 2026 |
 | Scope | MVP architecture, production direction, implementation status |
