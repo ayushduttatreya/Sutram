@@ -2,13 +2,16 @@
 FROM python:3.11-slim
 WORKDIR /app
 
+RUN useradd --system --no-create-home --uid 1001 appuser
 RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml .
+COPY uv.lock .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev --no-install-project
 
 COPY app/ ./app/
 
+USER appuser
 CMD ["uv", "run", "celery", "-A", "app.tasks.celery_app.celery_app", "worker", \
      "--concurrency=4", "-Q", "default", "--loglevel=info"]
