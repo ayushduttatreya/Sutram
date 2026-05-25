@@ -4,12 +4,13 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sutram_core.middleware.tenant import set_tenant_context
 
-from app.dependencies import get_db_session
+from app.dependencies import get_db_session, get_tenant_id_from_header
 from app.models.orm import WebhookSubscriptionORM
 from app.settings import get_settings
 from app.webhooks.crypto import encrypt_secret, generate_webhook_secret
@@ -17,6 +18,7 @@ from app.webhooks.crypto import encrypt_secret, generate_webhook_secret
 router = APIRouter(tags=["webhooks"])
 
 DBSession = Annotated[AsyncSession, Depends(get_db_session)]
+TenantID = Annotated[uuid.UUID, Depends(get_tenant_id_from_header)]
 
 
 class WebhookSubscriptionCreate(BaseModel):
@@ -47,8 +49,9 @@ class WebhookRegistrationResponse(BaseModel):
 async def create_webhook(
     body: WebhookSubscriptionCreate,
     session: DBSession,
-    tenant_id: uuid.UUID = Query(...),  # noqa: B008
+    tenant_id: TenantID,
 ) -> dict[str, object]:
+    await set_tenant_context(session, str(tenant_id))
     settings = get_settings()
     raw_secret = generate_webhook_secret()
     encrypted = encrypt_secret(raw_secret, settings.webhook_secret_encryption_key)
@@ -76,8 +79,9 @@ async def create_webhook(
 @router.get("/webhooks", response_model=list[WebhookSubscriptionResponse])
 async def list_webhooks(
     session: DBSession,
-    tenant_id: uuid.UUID = Query(...),  # noqa: B008
+    tenant_id: TenantID,
 ) -> list[WebhookSubscriptionORM]:
+    await set_tenant_context(session, str(tenant_id))
     result = await session.execute(
         select(WebhookSubscriptionORM).where(
             WebhookSubscriptionORM.tenant_id == tenant_id,
@@ -91,8 +95,9 @@ async def list_webhooks(
 async def delete_webhook(
     webhook_id: uuid.UUID,
     session: DBSession,
-    tenant_id: uuid.UUID = Query(...),  # noqa: B008
+    tenant_id: TenantID,
 ) -> None:
+    await set_tenant_context(session, str(tenant_id))
     result = await session.execute(
         select(WebhookSubscriptionORM).where(
             WebhookSubscriptionORM.id == webhook_id,
