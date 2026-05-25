@@ -38,7 +38,8 @@ async def _run(execution_id: str) -> None:
 
     from app.dependencies import get_db_session_context, get_redis_lock, get_stream_producers
     from app.engine.executor import ExecutionAlreadyTerminal, Executor
-    from app.models.orm import WorkflowExecutionORM
+    from app.models.orm import WorkflowExecutionORM, WorkflowORM
+    from sutram_core.models.workflow import WorkflowDefinition
 
     async with get_db_session_context() as session:
         result = await session.execute(
@@ -64,6 +65,12 @@ async def _run(execution_id: str) -> None:
             stream_producer_sse=sse_producer,
         )
 
-        from sutram_core.models.execution import ExecutionStatus
+        wf_result = await session.execute(
+            select(WorkflowORM).where(WorkflowORM.id == execution.workflow_id)
+        )
+        workflow_orm = wf_result.scalar_one_or_none()
+        if workflow_orm is None:
+            return  # workflow deleted
 
-        await executor._update_status(execution, ExecutionStatus.RUNNING)
+        definition = WorkflowDefinition.model_validate(workflow_orm.definition)
+        await executor.run(execution, definition)
